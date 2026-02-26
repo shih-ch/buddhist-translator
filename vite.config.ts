@@ -6,6 +6,9 @@ import path from 'path'
 export default defineConfig({
   base: '/buddhist-translator/',
   plugins: [react(), tailwindcss()],
+  server: {
+    port: 5176,
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

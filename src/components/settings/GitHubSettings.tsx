@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { CheckCircle, XCircle, Loader2, FolderSync } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { githubService } from '@/services/github'
 
 export function GitHubSettings() {
   const {
@@ -15,6 +17,7 @@ export function GitHubSettings() {
   } = useSettingsStore()
 
   const [testState, setTestState] = useState<'idle' | 'loading' | 'ok' | 'fail'>('idle')
+  const [migrateState, setMigrateState] = useState<'idle' | 'loading' | 'done' | 'fail'>('idle')
 
   const handleTest = async () => {
     setTestState('loading')
@@ -86,6 +89,35 @@ export function GitHubSettings() {
           </Button>
           {testState === 'ok' && <CheckCircle className="h-5 w-5 text-green-500" />}
           {testState === 'fail' && <XCircle className="h-5 w-5 text-red-500" />}
+        </div>
+
+        <Separator />
+
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Repo 結構遷移</Label>
+          <p className="text-xs text-muted-foreground">
+            將 repo 根目錄的研究資料檔案自動搬移到 research/ 子目錄，並更新 README.md。
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!githubToken || migrateState === 'loading'}
+            onClick={async () => {
+              setMigrateState('loading')
+              try {
+                await githubService.migrateRepoStructure()
+                setMigrateState('done')
+              } catch {
+                setMigrateState('fail')
+              }
+            }}
+          >
+            {migrateState === 'loading' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+            <FolderSync className="mr-1 h-3 w-3" />
+            執行遷移
+          </Button>
+          {migrateState === 'done' && <span className="text-xs text-green-600">遷移完成</span>}
+          {migrateState === 'fail' && <span className="text-xs text-red-600">遷移失敗</span>}
         </div>
       </CardContent>
     </Card>

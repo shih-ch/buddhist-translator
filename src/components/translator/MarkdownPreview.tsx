@@ -1,63 +1,78 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { parseFrontmatterOnly } from '@/services/markdownUtils';
+import { parseMarkdown } from '@/services/markdownUtils';
 
 interface MarkdownPreviewProps {
   content: string;
 }
 
-/**
- * Renders markdown with frontmatter displayed as a metadata table.
- */
 export function MarkdownPreview({ content }: MarkdownPreviewProps) {
-  if (!content) {
+  if (!content.trim()) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        尚無預覽內容
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        翻譯結果會顯示在這裡
       </div>
     );
   }
 
-  // Try to extract frontmatter for display
-  const fm = parseFrontmatterOnly(content);
-  const bodyStart = content.indexOf('---', 3);
-  const body = fm && bodyStart !== -1
-    ? content.slice(content.indexOf('\n', bodyStart) + 1)
-    : content;
+  // Parse frontmatter for display
+  let frontmatter: Record<string, unknown> | null = null;
+  let body = content;
+  try {
+    const parsed = parseMarkdown(content);
+    if (parsed.frontmatter.title) {
+      frontmatter = parsed.frontmatter as unknown as Record<string, unknown>;
+      // Reconstruct body with original text section
+      body = parsed.content;
+      if (parsed.originalText) {
+        body +=
+          '\n\n---\n\n<details>\n<summary>原文 (Original)</summary>\n\n' +
+          parsed.originalText +
+          '\n\n</details>';
+      }
+    }
+  } catch {
+    // Not parseable, just render as-is
+  }
 
   return (
-    <div className="p-4 space-y-4">
-      {/* Metadata table */}
-      {fm && (
-        <div className="rounded-md border text-sm">
-          <table className="w-full">
+    <div className="prose prose-sm dark:prose-invert max-w-none p-4">
+      {/* Frontmatter as metadata table */}
+      {frontmatter && (
+        <div className="mb-4 rounded border bg-muted/30 p-3 text-xs">
+          <table className="m-0 w-full">
             <tbody>
-              {fm.title && (
-                <tr className="border-b"><td className="px-3 py-1.5 font-medium text-muted-foreground w-24">標題</td><td className="px-3 py-1.5">{fm.title}</td></tr>
-              )}
-              {fm.author && (
-                <tr className="border-b"><td className="px-3 py-1.5 font-medium text-muted-foreground w-24">作者</td><td className="px-3 py-1.5">{fm.author}</td></tr>
-              )}
-              {fm.date && (
-                <tr className="border-b"><td className="px-3 py-1.5 font-medium text-muted-foreground w-24">日期</td><td className="px-3 py-1.5">{fm.date}</td></tr>
-              )}
-              {fm.original_language && (
-                <tr className="border-b"><td className="px-3 py-1.5 font-medium text-muted-foreground w-24">原文語言</td><td className="px-3 py-1.5">{fm.original_language}</td></tr>
-              )}
-              {fm.tags && fm.tags.length > 0 && (
-                <tr><td className="px-3 py-1.5 font-medium text-muted-foreground w-24">標籤</td><td className="px-3 py-1.5">{fm.tags.join(', ')}</td></tr>
-              )}
+              {Object.entries(frontmatter).map(([key, value]) => {
+                if (!value) return null;
+                const display = Array.isArray(value) ? value.join(', ') : String(value);
+                return (
+                  <tr key={key} className="border-0">
+                    <td className="border-0 py-0.5 pr-3 font-medium text-muted-foreground">
+                      {key}
+                    </td>
+                    <td className="border-0 py-0.5">{display}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Rendered markdown body */}
-      <div className="prose prose-sm dark:prose-invert max-w-none [&_details]:border [&_details]:rounded-md [&_details]:p-3 [&_details]:my-3 [&_summary]:cursor-pointer [&_summary]:font-medium [&_table]:text-xs">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {body}
-        </ReactMarkdown>
-      </div>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // Render <details> as collapsible
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          details: (props: any) => <details {...props} />,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          summary: (props: any) => (
+            <summary className="cursor-pointer font-medium" {...props} />
+          ),
+        }}
+      >
+        {body}
+      </ReactMarkdown>
     </div>
   );
 }

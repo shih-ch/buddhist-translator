@@ -10,6 +10,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useGlossaryStore } from '@/stores/glossaryStore';
 import type { AIMessage } from '@/services/ai/types';
 import { AI_PROVIDERS } from '@/stores/aiModels';
+import { logTranslation } from '@/services/translationLogger';
 
 const DEFAULT_PARAMS: TranslationParams = {
   keepOriginalPerLine: true,
@@ -271,6 +272,24 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
 
     const md = assembleMarkdown(state.metadata, msg.content, state.originalText || undefined);
     set({ previewContent: md });
+
+    // Log translation session to GitHub (fire-and-forget)
+    const userMessages = state.messages.filter((m) => m.role === 'user');
+    const corrections = userMessages.slice(1).map((m) => ({
+      type: 'other' as const,
+      instruction: m.content,
+    }));
+    const slug = state.metadata.title || state.metadata.date;
+    logTranslation({
+      date: new Date().toISOString().split('T')[0],
+      article: slug,
+      function: 'translation',
+      provider: state.currentModel.provider,
+      model: state.currentModel.model,
+      params: state.translationParams as unknown as Record<string, unknown>,
+      rounds: userMessages.length,
+      corrections,
+    }).catch(() => { /* non-blocking */ });
   },
 
   setPreviewContent: (content) => set({ previewContent: content }),

@@ -1,24 +1,80 @@
 import { Button } from '@/components/ui/button';
-import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
 import { useTranslatorStore } from '@/stores/translatorStore';
+import type { TranslationParams } from '@/types/settings';
+
+const PRESETS: { name: string; icon: string; params: TranslationParams }[] = [
+  {
+    name: '一般文章',
+    icon: '\u{1F4C4}',
+    params: {
+      keepOriginalPerLine: true,
+      narrativePerLine: false,
+      fiveColumnMode: false,
+      fiveColumnScope: '全文',
+      tibetanTranslitMode: 'A1',
+      mantraTranslit: 'IAST',
+      onlyVerseMantra: false,
+      proofreadMode: 'annotate_only',
+    },
+  },
+  {
+    name: '五欄全文',
+    icon: '\u{1F4CA}',
+    params: {
+      keepOriginalPerLine: true,
+      narrativePerLine: true,
+      fiveColumnMode: true,
+      fiveColumnScope: '全文',
+      tibetanTranslitMode: 'A1',
+      mantraTranslit: 'IAST',
+      onlyVerseMantra: false,
+      proofreadMode: 'annotate_only',
+    },
+  },
+  {
+    name: '儀軌/偈頌',
+    icon: '\u{1F4FF}',
+    params: {
+      keepOriginalPerLine: true,
+      narrativePerLine: false,
+      fiveColumnMode: true,
+      fiveColumnScope: '僅偈頌與咒語',
+      tibetanTranslitMode: 'A1',
+      mantraTranslit: 'IAST',
+      onlyVerseMantra: true,
+      proofreadMode: 'off',
+    },
+  },
+  {
+    name: '校對模式',
+    icon: '\u{1F50D}',
+    params: {
+      keepOriginalPerLine: true,
+      narrativePerLine: true,
+      fiveColumnMode: false,
+      fiveColumnScope: '全文',
+      tibetanTranslitMode: 'A1',
+      mantraTranslit: 'IAST',
+      onlyVerseMantra: false,
+      proofreadMode: 'annotate_only',
+    },
+  },
+];
 
 export function ParamPresets() {
-  const presets = useAIFunctionsStore((s) => s.presets);
-  const activePreset = useTranslatorStore((s) => s.activePreset);
-  const applyPreset = useTranslatorStore((s) => s.applyPreset);
+  const { activePreset, applyPreset } = useTranslatorStore();
 
   return (
     <div className="flex flex-wrap gap-1.5">
-      {presets.map((preset) => (
+      {PRESETS.map((p) => (
         <Button
-          key={preset.name}
-          variant={activePreset === preset.name ? 'default' : 'outline'}
-          size="sm"
-          className="text-xs"
-          onClick={() => applyPreset(preset.name, preset.params)}
+          key={p.name}
+          variant={activePreset === p.name ? 'default' : 'outline'}
+          size="xs"
+          onClick={() => applyPreset(p.name, p.params)}
         >
-          <span className="mr-1">{preset.icon}</span>
-          {preset.name}
+          <span className="mr-1">{p.icon}</span>
+          {p.name}
         </Button>
       ))}
     </div>

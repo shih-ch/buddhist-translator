@@ -1,71 +1,64 @@
 import { useRef, useEffect, useState } from 'react';
-import { Send, Square, Languages } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Send, Square, Languages } from 'lucide-react';
 import { useTranslatorStore } from '@/stores/translatorStore';
 import { ModelSelector } from './ModelSelector';
 import { ChatMessage } from './ChatMessage';
 import { TermExtractor } from './TermExtractor';
-import { toast } from 'sonner';
 
 export function ChatPanel() {
+  const {
+    messages,
+    isLoading,
+    originalText,
+    importedText,
+    inputMode,
+    sendMessage,
+    adoptVersion,
+    stopGeneration,
+  } = useTranslatorStore();
   const [input, setInput] = useState('');
-  const [termExtractMsg, setTermExtractMsg] = useState<string | null>(null);
+  const [showTermExtractor, setShowTermExtractor] = useState(false);
+  const [adoptedMessageId, setAdoptedMessageId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const messages = useTranslatorStore((s) => s.messages);
-  const isLoading = useTranslatorStore((s) => s.isLoading);
-  const originalText = useTranslatorStore((s) => s.originalText);
-  const sendMessage = useTranslatorStore((s) => s.sendMessage);
-  const adoptVersion = useTranslatorStore((s) => s.adoptVersion);
-  const stopGeneration = useTranslatorStore((s) => s.stopGeneration);
-
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom on new messages
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
 
-  const handleSend = async () => {
+  const handleSend = () => {
+    if (isLoading) return;
     const text = input.trim();
     if (!text) return;
     setInput('');
-    try {
-      await sendMessage(text);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : '傳送失敗');
-    }
+    sendMessage(text);
   };
 
-  const handleTranslate = async () => {
-    if (!originalText.trim()) return;
-    try {
-      await sendMessage(originalText);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : '翻譯失敗');
-    }
+  const handleTranslate = () => {
+    const text = inputMode === 'import' ? importedText : originalText;
+    if (!text.trim()) return;
+    sendMessage(text);
+  };
+
+  const handleAdopt = (messageId: string) => {
+    adoptVersion(messageId);
+    setAdoptedMessageId(messageId);
+    setShowTermExtractor(true);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSend();
     }
   };
 
-  const handleAdopt = (messageId: string) => {
-    adoptVersion(messageId);
-    // Show term extraction dialog
-    const msg = messages.find((m) => m.id === messageId);
-    if (msg) {
-      setTermExtractMsg(messageId);
-    }
-  };
-
-  const hasMessages = messages.length > 0;
+  const hasSource = inputMode === 'import' ? importedText.trim() : originalText.trim();
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -73,62 +66,69 @@ export function ChatPanel() {
 
       {/* Messages area */}
       <ScrollArea className="flex-1" ref={scrollRef}>
-        <div className="space-y-4 p-3">
-          {!hasMessages && (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm">
-              <Languages className="size-10 mb-3 opacity-40" />
-              <p>在左側輸入原文後點擊「翻譯」開始</p>
-              <p className="text-xs mt-1">或直接在下方輸入訊息</p>
+        <div className="space-y-3 p-3">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-sm text-muted-foreground">
+              <Languages className="mb-3 h-8 w-8" />
+              <p>在左側輸入原文，然後點擊「翻譯」開始</p>
+              <p className="text-xs">或在下方輸入修正指令</p>
             </div>
           )}
 
-          {messages.map((msg, i) => (
-            <ChatMessage
-              key={msg.id}
-              message={msg}
-              isStreaming={isLoading && i === messages.length - 1 && msg.role === 'assistant'}
-              onAdopt={msg.role === 'assistant' && msg.content ? () => handleAdopt(msg.id) : undefined}
-            />
-          ))}
+          {messages
+            .filter((m) => m.role !== 'system')
+            .map((msg, idx, arr) => (
+              <ChatMessage
+                key={msg.id}
+                message={msg}
+                onAdopt={msg.role === 'assistant' ? () => handleAdopt(msg.id) : undefined}
+                isStreaming={isLoading && idx === arr.length - 1 && msg.role === 'assistant'}
+              />
+            ))}
         </div>
       </ScrollArea>
 
       {/* Input area */}
-      <div className="border-t p-3 space-y-2">
-        {!hasMessages && originalText.trim() && (
-          <Button className="w-full" onClick={handleTranslate} disabled={isLoading}>
-            <Languages className="size-4 mr-2" />
+      <div className="border-t p-3">
+        {messages.length === 0 && hasSource ? (
+          <Button onClick={handleTranslate} className="w-full" disabled={isLoading}>
+            <Languages className="mr-2 h-4 w-4" />
             翻譯
           </Button>
+        ) : (
+          <div className="flex gap-2">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="輸入修正指令... (Ctrl+Enter 發送)"
+              className="min-h-[60px] resize-none text-sm"
+              disabled={isLoading}
+            />
+            <div className="flex flex-col gap-1">
+              {isLoading ? (
+                <Button variant="destructive" size="icon" onClick={stopGeneration}>
+                  <Square className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  size="icon"
+                  onClick={handleSend}
+                  disabled={!input.trim()}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
         )}
-
-        <div className="flex gap-2">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={hasMessages ? '輸入修正指令...' : '或直接輸入訊息...'}
-            className="min-h-[2.5rem] max-h-24 resize-none text-sm"
-            disabled={isLoading}
-            rows={1}
-          />
-          {isLoading ? (
-            <Button variant="destructive" size="icon" className="shrink-0" onClick={stopGeneration}>
-              <Square className="size-4" />
-            </Button>
-          ) : (
-            <Button size="icon" className="shrink-0" onClick={handleSend} disabled={!input.trim()}>
-              <Send className="size-4" />
-            </Button>
-          )}
-        </div>
       </div>
 
-      {/* Term extraction dialog */}
+      {/* Term Extractor Modal */}
       <TermExtractor
-        open={termExtractMsg !== null}
-        onClose={() => setTermExtractMsg(null)}
-        messageId={termExtractMsg}
+        open={showTermExtractor}
+        onClose={() => setShowTermExtractor(false)}
+        messageId={adoptedMessageId}
       />
     </div>
   );
