@@ -264,7 +264,7 @@ class GitHubService {
   async updateReadme(): Promise<void> {
     const articles = await this.listTranslations()
     const researchFiles = await this.listResearchFiles()
-    const readmeContent = generateReadme(articles, researchFiles)
+    const readmeContent = generateReadme(articles, researchFiles, { owner: this.owner, repo: this.repo })
     let sha: string | undefined
     try {
       const existing = await this.getFile('README.md')

@@ -105,19 +105,25 @@ export function ArticlesPageContent() {
                       {TITLES[cat] ?? cat}
                     </h4>
                     <ul className="space-y-1">
-                      {files.map((f) => (
-                        <li key={f.path}>
-                          <a
-                            href={`https://github.com/${owner}/${repo}/blob/${githubBranch}/${f.path}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                          >
-                            {f.name}
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </li>
-                      ))}
+                      {files.map((f) => {
+                        const isHtml = f.name.endsWith('.html')
+                        const href = isHtml
+                          ? `https://${owner}.github.io/${repo}/${f.path}`
+                          : `https://github.com/${owner}/${repo}/blob/${githubBranch}/${f.path}`
+                        return (
+                          <li key={f.path}>
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                            >
+                              {f.name}
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </li>
+                        )
+                      })}
                     </ul>
                   </div>
                 ))

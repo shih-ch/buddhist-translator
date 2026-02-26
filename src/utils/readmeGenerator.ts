@@ -33,8 +33,11 @@ const CATEGORY_TITLES: Record<string, string> = {
  */
 export function generateReadme(
   articles: ArticleSummary[],
-  researchFiles: ResearchFile[]
+  researchFiles: ResearchFile[],
+  options?: { owner?: string; repo?: string }
 ): string {
+  const owner = options?.owner ?? 'shih-ch'
+  const repo = options?.repo ?? 'mantra'
   const lines: string[] = []
 
   lines.push('# 佛學文章翻譯與研究集')
@@ -105,7 +108,10 @@ export function generateReadme(
       lines.push('')
       for (const f of files) {
         const label = f.name.replace(/\.[^.]+$/, '')
-        lines.push(`- [${label}](./${f.path})`)
+        const href = f.name.endsWith('.html')
+          ? `https://${owner}.github.io/${repo}/${f.path}`
+          : `./${f.path}`
+        lines.push(`- [${label}](${href})`)
       }
       lines.push('')
     }

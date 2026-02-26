@@ -25,7 +25,7 @@ const DEFAULT_PARAMS: TranslationParams = {
 
 const DEFAULT_FRONTMATTER: ArticleFrontmatter = {
   title: '',
-  author: 'Олег Ганченко',
+  author: '',
   source: '',
   date: new Date().toISOString().split('T')[0],
   original_language: 'ru',
@@ -83,6 +83,20 @@ function genId() {
   return `msg-${++messageCounter}-${Date.now()}`;
 }
 
+/** Extract a title from translated content: first markdown heading, or first non-empty line */
+function extractTitle(content: string): string | null {
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    // Match markdown heading: # Title
+    const headingMatch = trimmed.match(/^#{1,3}\s+(.+)/);
+    if (headingMatch) return headingMatch[1].trim();
+    // Use first non-empty line as fallback
+    return trimmed;
+  }
+  return null;
+}
+
 export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   // Initial state
   inputMode: 'paste',
@@ -93,7 +107,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   activePreset: '一般文章',
   messages: [],
   isLoading: false,
-  currentModel: { provider: 'openai' as AIProviderId, model: 'gpt-4o' },
+  currentModel: { provider: 'openai' as AIProviderId, model: 'gpt-5.2-pro' },
   totalTokens: 0,
   totalCost: 0,
   previewContent: '',
@@ -270,7 +284,17 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     const msg = state.messages.find((m) => m.id === messageId);
     if (!msg) return;
 
-    const md = assembleMarkdown(state.metadata, msg.content, state.originalText || undefined);
+    // If title is empty, extract from translated content
+    let metadata = state.metadata;
+    if (!metadata.title.trim()) {
+      const extracted = extractTitle(msg.content);
+      if (extracted) {
+        metadata = { ...metadata, title: extracted };
+        set({ metadata });
+      }
+    }
+
+    const md = assembleMarkdown(metadata, msg.content, state.originalText || undefined);
     set({ previewContent: md });
 
     // Log translation session to GitHub (fire-and-forget)
@@ -326,7 +350,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
       activePreset: '一般文章',
       messages: [],
       isLoading: false,
-      currentModel: { provider: 'openai', model: 'gpt-4o' },
+      currentModel: { provider: 'openai', model: 'gpt-5.2-pro' },
       totalTokens: 0,
       totalCost: 0,
       previewContent: '',
