@@ -4,8 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Loader2, Sparkles } from 'lucide-react';
 import { useTranslatorStore } from '@/stores/translatorStore';
-import { mockFormattingCall } from '@/services/ai/mock';
+import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { callFunction } from '@/services/ai/router';
+import { buildFormattingMessages } from '@/services/ai/promptBuilder';
 import { parseMarkdown, assembleMarkdown } from '@/services/markdownUtils';
+import { toast } from 'sonner';
 
 export function ImportInput() {
   const { importedText, setImportedText, setOriginalText, updateMetadata, setPreviewContent, metadata } =
@@ -41,18 +45,39 @@ export function ImportInput() {
 
   const handleFormat = async () => {
     if (!importedText.trim()) return;
+    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('formatting');
+    const apiKeys = useSettingsStore.getState().apiKeys;
+    if (!apiKeys[fnConfig.provider]) {
+      toast.error('請先在設定中填入 API Key');
+      return;
+    }
     setFormatting(true);
     try {
-      const result = await mockFormattingCall(importedText);
+      const messages = buildFormattingMessages(fnConfig.prompt, importedText, originalForImport || undefined);
+      const response = await callFunction(fnConfig, apiKeys, messages);
+
+      // Parse AI response as JSON
+      let jsonStr = response.content.trim();
+      const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) jsonStr = codeBlockMatch[1].trim();
+
+      const result = JSON.parse(jsonStr) as {
+        title: string;
+        tags: string[];
+        formatted_content: string;
+      };
+
       if (result.title && !metadata.title) {
         updateMetadata({ title: result.title, tags: result.tags });
       }
       const md = assembleMarkdown(
-        { ...metadata, title: result.title || metadata.title, tags: result.tags },
+        { ...metadata, title: result.title || metadata.title, tags: result.tags || metadata.tags },
         result.formatted_content,
         originalForImport || undefined
       );
       setPreviewContent(md);
+    } catch (err) {
+      toast.error(`格式整理失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setFormatting(false);
     }

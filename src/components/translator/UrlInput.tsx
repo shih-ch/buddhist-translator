@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Globe } from 'lucide-react';
 import { useTranslatorStore } from '@/stores/translatorStore';
+import { fetchWebPage, parseHtmlContent } from '@/services/contentParser';
+import { toast } from 'sonner';
 
 export function UrlInput() {
   const [url, setUrl] = useState('');
@@ -15,15 +17,24 @@ export function UrlInput() {
     if (!url.trim()) return;
     setLoading(true);
 
-    // Mock: simulate fetch delay
-    await new Promise((r) => setTimeout(r, 1200));
-    const mockContent =
-      '（mock）已從網址擷取內容。\n\n這是模擬的網頁文章內容，實際功能將在接上 contentParser 後生效。\n\n原始網址：' +
-      url;
-    setFetchedText(mockContent);
-    setOriginalText(mockContent);
-    updateMetadata({ source: url });
-    setLoading(false);
+    try {
+      const html = await fetchWebPage(url);
+      const { title, text, metadata } = parseHtmlContent(html);
+
+      setFetchedText(text);
+      setOriginalText(text);
+
+      const metadataUpdates: Record<string, string> = { source: url };
+      if (title) metadataUpdates.title = title;
+      if (metadata.author) metadataUpdates.author = metadata.author;
+      if (metadata.date) metadataUpdates.date = metadata.date;
+      if (metadata.language) metadataUpdates.original_language = metadata.language;
+      updateMetadata(metadataUpdates);
+    } catch (err) {
+      toast.error(`擷取失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {

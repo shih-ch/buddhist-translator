@@ -2,8 +2,14 @@ import { create } from 'zustand';
 import type { ArticleFrontmatter, Article } from '@/types/article';
 import type { ChatMessage } from '@/types/chat';
 import type { AIProviderId, TranslationParams } from '@/types/settings';
-import { mockStreamingCall } from '@/services/ai/mock';
 import { assembleMarkdown } from '@/services/markdownUtils';
+import { callFunction } from '@/services/ai/router';
+import { buildTranslationMessages } from '@/services/ai/promptBuilder';
+import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { useGlossaryStore } from '@/stores/glossaryStore';
+import type { AIMessage } from '@/services/ai/types';
+import { AI_PROVIDERS } from '@/stores/aiModels';
 
 const DEFAULT_PARAMS: TranslationParams = {
   keepOriginalPerLine: true,
@@ -124,6 +130,16 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     const state = get();
     if (state.isLoading) return;
 
+    // Check API key before proceeding
+    const apiKeys = useSettingsStore.getState().apiKeys;
+    const provider = state.currentModel.provider;
+    if (!apiKeys[provider]) {
+      const providerNames: Record<string, string> = {
+        openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', perplexity: 'Perplexity',
+      };
+      throw new Error(`請先在設定中填入 ${providerNames[provider] ?? provider} API Key`);
+    }
+
     const abortController = new AbortController();
 
     // Add user message
@@ -151,24 +167,68 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     }));
 
     try {
-      const allMessages = [...state.messages, userMsg].map((m) => ({
-        role: m.role,
+      // Build messages using promptBuilder
+      const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('translation');
+      const glossaryTerms = useGlossaryStore.getState().glossary?.terms ?? [];
+
+      // Build chat history for translation context
+      const chatHistory: AIMessage[] = state.messages.map((m) => ({
+        role: m.role as 'user' | 'assistant' | 'system',
         content: m.content,
       }));
+      // Add current user message to history
+      chatHistory.push({ role: 'user', content });
 
-      const response = await mockStreamingCall(
-        allMessages,
-        (chunk) => {
-          set((s) => {
-            const msgs = [...s.messages];
-            const last = msgs[msgs.length - 1];
-            if (last.id === assistantMsg.id) {
-              msgs[msgs.length - 1] = { ...last, content: last.content + chunk };
-            }
-            return { messages: msgs };
-          });
-        },
-        abortController.signal
+      // For the first message, use the full translation prompt builder
+      // For follow-up messages, just pass the conversation history
+      let messages: AIMessage[];
+      if (state.messages.length === 0) {
+        messages = buildTranslationMessages(
+          fnConfig.prompt,
+          content,
+          state.translationParams,
+          glossaryTerms,
+          []
+        );
+      } else {
+        // Follow-up: system prompt + full history
+        messages = buildTranslationMessages(
+          fnConfig.prompt,
+          state.originalText,
+          state.translationParams,
+          glossaryTerms,
+          chatHistory
+        );
+      }
+
+      // Calculate cost using actual model prices
+      const providerModels = AI_PROVIDERS[state.currentModel.provider];
+      const modelInfo = providerModels?.models.find((m) => m.id === state.currentModel.model);
+      const inputPrice = modelInfo?.inputPrice ?? 2.5;
+      const outputPrice = modelInfo?.outputPrice ?? 10;
+
+      const response = await callFunction(
+        fnConfig,
+        apiKeys,
+        messages,
+        {
+          overrideProvider: state.currentModel.provider,
+          overrideModel: state.currentModel.model,
+          stream: {
+            onChunk: (chunk) => {
+              set((s) => {
+                const msgs = [...s.messages];
+                const last = msgs[msgs.length - 1];
+                if (last.id === assistantMsg.id) {
+                  msgs[msgs.length - 1] = { ...last, content: last.content + chunk };
+                }
+                return { messages: msgs };
+              });
+            },
+            onDone: () => {},
+            onError: () => {},
+          },
+        }
       );
 
       // Update final message with usage info
@@ -185,12 +245,22 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
           totalTokens: s.totalTokens + response.usage.total_tokens,
           totalCost:
             s.totalCost +
-            (response.usage.prompt_tokens * 2.5 + response.usage.completion_tokens * 10) /
+            (response.usage.prompt_tokens * inputPrice +
+              response.usage.completion_tokens * outputPrice) /
               1_000_000,
         };
       });
-    } catch {
-      set({ isLoading: false, abortController: null });
+    } catch (err) {
+      // Add error message to chat
+      set((s) => {
+        const msgs = [...s.messages];
+        const last = msgs[msgs.length - 1];
+        if (last.id === assistantMsg.id) {
+          const errorText = err instanceof Error ? err.message : 'Unknown error';
+          msgs[msgs.length - 1] = { ...last, content: `**Error:** ${errorText}` };
+        }
+        return { messages: msgs, isLoading: false, abortController: null };
+      });
     }
   },
 
