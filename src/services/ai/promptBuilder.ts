@@ -1,6 +1,7 @@
 import type { TranslationParams } from '../../types/settings';
 import type { GlossaryTerm } from '../../types/glossary';
 import type { AIMessage } from './types';
+import { filterRelevantTerms } from '../glossaryFilter';
 
 const PARAM_LABELS: Record<string, string> = {
   keepOriginalPerLine: '保留原文逐句',
@@ -105,7 +106,8 @@ export function buildTranslationMessages(
   glossaryTerms: GlossaryTerm[],
   chatHistory: AIMessage[]
 ): AIMessage[] {
-  const glossaryBlock = formatGlossaryBlock(glossaryTerms);
+  const filteredTerms = filterRelevantTerms(glossaryTerms, originalText);
+  const glossaryBlock = formatGlossaryBlock(filteredTerms);
   const fullSystem = systemPrompt + glossaryBlock;
 
   const paramsBlock = formatParamsBlock(params);

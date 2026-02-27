@@ -10,6 +10,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { StatsCards } from './StatsCards'
 import { MonthlyChart } from './MonthlyChart'
 import { RecentArticles } from './RecentArticles'
+import { CostSummary } from './CostSummary'
 
 export function Dashboard() {
   const navigate = useNavigate()
@@ -85,6 +86,8 @@ export function Dashboard() {
         <MonthlyChart articles={articles} />
         <RecentArticles articles={articles} />
       </div>
+
+      <CostSummary />
     </div>
   )
 }

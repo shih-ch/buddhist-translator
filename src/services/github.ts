@@ -339,12 +339,15 @@ class GitHubService {
 
   // ─── Migration ───
 
-  async migrateRepoStructure(): Promise<void> {
+  async migrateRepoStructure(onProgress?: (msg: string) => void): Promise<void> {
+    const log = (msg: string) => onProgress?.(msg)
+
+    log('讀取 repo 根目錄...')
     const rootFiles = await this.listDirectory('')
 
+    const filesToMigrate: Array<{ file: FileEntry; targetDir: string }> = []
     for (const file of rootFiles) {
       if (file.type !== 'file') continue
-      // Skip known root files
       if (['README.md', 'glossary.json', 'config.json', 'translation_logs.json'].includes(file.name)) continue
 
       let targetDir = ''
@@ -362,19 +365,34 @@ class GitHubService {
         continue
       }
 
-      // Read, create at new location, delete old
+      filesToMigrate.push({ file, targetDir })
+    }
+
+    if (filesToMigrate.length === 0) {
+      log('沒有需要遷移的檔案。')
+      return
+    }
+
+    log(`找到 ${filesToMigrate.length} 個需要遷移的檔案`)
+
+    for (let i = 0; i < filesToMigrate.length; i++) {
+      const { file, targetDir } = filesToMigrate[i]
+      const newPath = `${targetDir}/${file.name}`
+      log(`[${i + 1}/${filesToMigrate.length}] ${file.name} → ${newPath}`)
+
       try {
         const { content, sha } = await this.getFile(file.path)
-        const newPath = `${targetDir}/${file.name}`
         await this.createOrUpdateFile(newPath, content, `Migrate: ${file.name} → ${newPath}`)
         await this.deleteFile(file.path, sha, `Migrate: remove old ${file.path}`)
-      } catch {
-        // Skip files that can't be migrated
+        log(`  ✓ 完成`)
+      } catch (err) {
+        log(`  ✗ 失敗：${err instanceof Error ? err.message : 'unknown'}`)
       }
     }
 
-    // Update README after migration
+    log('更新 README...')
     await this.updateReadme()
+    log('遷移完成！')
   }
 
   // ─── Utilities ───

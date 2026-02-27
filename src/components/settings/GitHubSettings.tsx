@@ -18,6 +18,7 @@ export function GitHubSettings() {
 
   const [testState, setTestState] = useState<'idle' | 'loading' | 'ok' | 'fail'>('idle')
   const [migrateState, setMigrateState] = useState<'idle' | 'loading' | 'done' | 'fail'>('idle')
+  const [migrateLogs, setMigrateLogs] = useState<string[]>([])
 
   const handleTest = async () => {
     setTestState('loading')
@@ -104,8 +105,11 @@ export function GitHubSettings() {
             disabled={!githubToken || migrateState === 'loading'}
             onClick={async () => {
               setMigrateState('loading')
+              setMigrateLogs([])
               try {
-                await githubService.migrateRepoStructure()
+                await githubService.migrateRepoStructure((msg) => {
+                  setMigrateLogs((prev) => [...prev, msg])
+                })
                 setMigrateState('done')
               } catch {
                 setMigrateState('fail')
@@ -118,6 +122,13 @@ export function GitHubSettings() {
           </Button>
           {migrateState === 'done' && <span className="text-xs text-green-600">遷移完成</span>}
           {migrateState === 'fail' && <span className="text-xs text-red-600">遷移失敗</span>}
+          {migrateLogs.length > 0 && (
+            <div className="mt-2 max-h-40 overflow-y-auto rounded-md border bg-muted/50 p-2">
+              {migrateLogs.map((log, i) => (
+                <div key={i} className="text-xs font-mono text-muted-foreground">{log}</div>
+              ))}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

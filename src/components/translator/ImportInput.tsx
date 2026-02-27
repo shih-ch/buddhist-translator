@@ -6,7 +6,7 @@ import { Loader2, Sparkles } from 'lucide-react';
 import { useTranslatorStore } from '@/stores/translatorStore';
 import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { callFunction } from '@/services/ai/router';
+import { trackedCallFunction } from '@/services/ai/trackedCall';
 import { buildFormattingMessages } from '@/services/ai/promptBuilder';
 import { parseMarkdown, assembleMarkdown } from '@/services/markdownUtils';
 import { toast } from 'sonner';
@@ -54,7 +54,7 @@ export function ImportInput() {
     setFormatting(true);
     try {
       const messages = buildFormattingMessages(fnConfig.prompt, importedText, originalForImport || undefined);
-      const response = await callFunction(fnConfig, apiKeys, messages);
+      const response = await trackedCallFunction(fnConfig, apiKeys, messages, undefined, 'formatting');
 
       // Parse AI response as JSON
       let jsonStr = response.content.trim();

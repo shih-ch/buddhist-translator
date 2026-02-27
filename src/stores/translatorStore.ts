@@ -11,6 +11,7 @@ import { useGlossaryStore } from '@/stores/glossaryStore';
 import type { AIMessage } from '@/services/ai/types';
 import { AI_PROVIDERS } from '@/stores/aiModels';
 import { logTranslation } from '@/services/translationLogger';
+import { useCostTrackingStore } from '@/stores/costTrackingStore';
 import { toast } from 'sonner';
 
 const DEFAULT_PARAMS: TranslationParams = {
@@ -340,6 +341,19 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
       );
 
       // Update final message with usage info
+      const callCost = (response.usage.prompt_tokens * inputPrice +
+        response.usage.completion_tokens * outputPrice) / 1_000_000;
+
+      // Record in persistent cost tracking
+      useCostTrackingStore.getState().addEntry({
+        provider: state.currentModel.provider,
+        model: state.currentModel.model,
+        functionType: 'translation',
+        inputTokens: response.usage.prompt_tokens,
+        outputTokens: response.usage.completion_tokens,
+        cost: callCost,
+      });
+
       set((s) => {
         const msgs = [...s.messages];
         const last = msgs[msgs.length - 1];
@@ -351,11 +365,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
           isLoading: false,
           abortController: null,
           totalTokens: s.totalTokens + response.usage.total_tokens,
-          totalCost:
-            s.totalCost +
-            (response.usage.prompt_tokens * inputPrice +
-              response.usage.completion_tokens * outputPrice) /
-              1_000_000,
+          totalCost: s.totalCost + callCost,
         };
       });
     } catch (err) {
@@ -443,7 +453,26 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
 
   setPreviewMode: (mode) => set({ previewMode: mode }),
 
-  loadArticleForEdit: (article) =>
+  loadArticleForEdit: (article) => {
+    // Create synthetic chat messages so user sees the original conversation
+    const syntheticMessages: ChatMessage[] = [];
+    if (article.originalText) {
+      syntheticMessages.push({
+        id: genId(),
+        role: 'user',
+        content: article.originalText,
+        timestamp: Date.now() - 1000,
+      });
+    }
+    if (article.content) {
+      syntheticMessages.push({
+        id: genId(),
+        role: 'assistant',
+        content: article.content,
+        timestamp: Date.now(),
+        model: article.frontmatter.translator_model || undefined,
+      });
+    }
     set({
       editingArticle: article,
       metadata: { ...article.frontmatter },
@@ -453,7 +482,9 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
         article.originalText
       ),
       originalText: article.originalText ?? '',
-    }),
+      messages: syntheticMessages,
+    });
+  },
 
   stopGeneration: () => {
     const { abortController } = get();

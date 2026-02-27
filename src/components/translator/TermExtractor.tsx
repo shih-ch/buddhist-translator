@@ -16,7 +16,7 @@ import { useTranslatorStore } from '@/stores/translatorStore';
 import { useGlossaryStore } from '@/stores/glossaryStore';
 import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { callFunction } from '@/services/ai/router';
+import { trackedCallFunction } from '@/services/ai/trackedCall';
 import { buildTermExtractionMessages } from '@/services/ai/promptBuilder';
 import type { GlossaryTerm } from '@/types/glossary';
 import { toast } from 'sonner';
@@ -70,7 +70,7 @@ export function TermExtractor({ open, onClose, messageId }: TermExtractorProps) 
     }
     const aiMessages = buildTermExtractionMessages(fnConfig.prompt, originalText, msg.content);
 
-    callFunction(fnConfig, apiKeys, aiMessages)
+    trackedCallFunction(fnConfig, apiKeys, aiMessages, undefined, 'term_extraction')
       .then((response) => {
         try {
           // Try to parse JSON from the response (may be wrapped in markdown code block)

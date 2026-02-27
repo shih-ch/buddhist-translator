@@ -6,6 +6,7 @@ import {
   DEFAULT_TERM_EXTRACTION_PROMPT,
   DEFAULT_URL_CLEANUP_PROMPT,
 } from './defaultPrompts'
+import { usePromptHistoryStore } from './promptHistoryStore'
 
 const DEFAULT_FUNCTIONS: AIFunctionConfig[] = [
   {
@@ -158,6 +159,13 @@ export const useAIFunctionsStore = create<AIFunctionsState>((set, get) => ({
   },
 
   updateFunctionConfig: (id, updates) => {
+    // Record prompt change in history (before applying)
+    if (updates.prompt !== undefined) {
+      const current = get().functions.find((f) => f.id === id)
+      if (current && current.prompt !== updates.prompt) {
+        usePromptHistoryStore.getState().addEntry(id, current.prompt, 'edit')
+      }
+    }
     set((state) => {
       const updated = state.functions.map((f) =>
         f.id === id ? { ...f, ...updates } : f
@@ -170,7 +178,18 @@ export const useAIFunctionsStore = create<AIFunctionsState>((set, get) => ({
   resetFunctionPrompt: (id) => {
     const def = DEFAULT_FUNCTIONS.find((f) => f.id === id)
     if (!def) return
-    get().updateFunctionConfig(id, { prompt: def.defaultPrompt })
+    // Record current prompt before resetting
+    const current = get().functions.find((f) => f.id === id)
+    if (current && current.prompt !== def.defaultPrompt) {
+      usePromptHistoryStore.getState().addEntry(id, current.prompt, 'reset')
+    }
+    set((state) => {
+      const updated = state.functions.map((f) =>
+        f.id === id ? { ...f, prompt: def.defaultPrompt } : f
+      )
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+      return { functions: updated }
+    })
   },
 
   getPresetsConfig: () => get().presets,
