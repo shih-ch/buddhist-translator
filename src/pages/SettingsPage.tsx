@@ -3,6 +3,7 @@ import { ApiKeySettings } from '@/components/settings/ApiKeySettings'
 import { GitHubSettings } from '@/components/settings/GitHubSettings'
 import { AIFunctionList } from '@/components/settings/AIFunctionList'
 import { ParamPresetEditor } from '@/components/settings/ParamPresetEditor'
+import { DataExportImport } from '@/components/settings/DataExportImport'
 
 export default function SettingsPage() {
   return (
@@ -31,6 +32,8 @@ export default function SettingsPage() {
           <ParamPresetEditor />
         </TabsContent>
       </Tabs>
+
+      <DataExportImport />
     </div>
   )
 }
