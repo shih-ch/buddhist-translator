@@ -1,7 +1,8 @@
+import { useMemo } from 'react';
 import { DollarSign, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useCostTrackingStore } from '@/stores/costTrackingStore';
+import { useCostTrackingStore, computeSummary } from '@/stores/costTrackingStore';
 
 const PROVIDER_LABELS: Record<string, string> = {
   openai: 'OpenAI',
@@ -22,8 +23,9 @@ function formatTokens(tokens: number): string {
 }
 
 export function CostSummary() {
-  const summary = useCostTrackingStore((s) => s.getSummary());
+  const entries = useCostTrackingStore((s) => s.entries);
   const clearEntries = useCostTrackingStore((s) => s.clearEntries);
+  const summary = useMemo(() => computeSummary(entries), [entries]);
 
   if (summary.totalCalls === 0) return null;
 

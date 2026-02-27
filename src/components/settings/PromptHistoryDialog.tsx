@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Clock, RotateCcw, Eye, Diff, Trash2 } from 'lucide-react';
 import {
   Dialog,
@@ -40,10 +40,14 @@ function formatTime(ts: number): string {
 }
 
 export function PromptHistoryDialog({ open, onClose, functionId }: PromptHistoryDialogProps) {
-  const entries = usePromptHistoryStore((s) => s.getEntries(functionId));
+  const allEntries = usePromptHistoryStore((s) => s.entries);
   const clearEntries = usePromptHistoryStore((s) => s.clearEntries);
+  const entries = useMemo(
+    () => allEntries.filter((e) => e.functionId === functionId).sort((a, b) => b.timestamp - a.timestamp),
+    [allEntries, functionId]
+  );
   const updateFunctionConfig = useAIFunctionsStore((s) => s.updateFunctionConfig);
-  const currentPrompt = useAIFunctionsStore((s) => s.getFunctionConfig(functionId).prompt);
+  const currentPrompt = useAIFunctionsStore((s) => s.functions.find((f) => f.id === functionId)?.prompt ?? '');
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'view' | 'diff'>('view');

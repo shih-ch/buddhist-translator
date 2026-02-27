@@ -28,7 +28,7 @@ export function AIFunctionCard({ config }: AIFunctionCardProps) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [optimizerOpen, setOptimizerOpen] = useState(false)
   const promptRef = useRef(config.prompt)
-  const historyCount = usePromptHistoryStore((s) => s.getEntries(config.id).length)
+  const historyCount = usePromptHistoryStore((s) => s.entries.filter((e) => e.functionId === config.id).length)
 
   const providerModels = AI_PROVIDERS[config.provider]?.models ?? []
 

@@ -37,15 +37,45 @@ function saveEntries(entries: CostEntry[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 }
 
+/** Pure function — safe to call inside useMemo / selectors */
+export function computeSummary(entries: CostEntry[]): CostSummaryData {
+  const byProvider: CostSummaryData['byProvider'] = {};
+  const byModel: CostSummaryData['byModel'] = {};
+  let totalCost = 0;
+  let totalTokens = 0;
+  let last30Days = 0;
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+  for (const e of entries) {
+    totalCost += e.cost;
+    totalTokens += e.inputTokens + e.outputTokens;
+
+    if (e.timestamp > thirtyDaysAgo) {
+      last30Days += e.cost;
+    }
+
+    if (!byProvider[e.provider]) byProvider[e.provider] = { cost: 0, tokens: 0, calls: 0 };
+    byProvider[e.provider].cost += e.cost;
+    byProvider[e.provider].tokens += e.inputTokens + e.outputTokens;
+    byProvider[e.provider].calls++;
+
+    if (!byModel[e.model]) byModel[e.model] = { cost: 0, tokens: 0, calls: 0 };
+    byModel[e.model].cost += e.cost;
+    byModel[e.model].tokens += e.inputTokens + e.outputTokens;
+    byModel[e.model].calls++;
+  }
+
+  return { totalCost, totalTokens, byProvider, byModel, last30Days, totalCalls: entries.length };
+}
+
 interface CostTrackingState {
   entries: CostEntry[];
 
   addEntry: (entry: Omit<CostEntry, 'id' | 'timestamp'>) => void;
-  getSummary: () => CostSummaryData;
   clearEntries: () => void;
 }
 
-export const useCostTrackingStore = create<CostTrackingState>((set, get) => ({
+export const useCostTrackingStore = create<CostTrackingState>((set) => ({
   entries: loadEntries(),
 
   addEntry: (data) => {
@@ -59,37 +89,6 @@ export const useCostTrackingStore = create<CostTrackingState>((set, get) => ({
       saveEntries(entries);
       return { entries };
     });
-  },
-
-  getSummary: () => {
-    const entries = get().entries;
-    const byProvider: CostSummaryData['byProvider'] = {};
-    const byModel: CostSummaryData['byModel'] = {};
-    let totalCost = 0;
-    let totalTokens = 0;
-    let last30Days = 0;
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-
-    for (const e of entries) {
-      totalCost += e.cost;
-      totalTokens += e.inputTokens + e.outputTokens;
-
-      if (e.timestamp > thirtyDaysAgo) {
-        last30Days += e.cost;
-      }
-
-      if (!byProvider[e.provider]) byProvider[e.provider] = { cost: 0, tokens: 0, calls: 0 };
-      byProvider[e.provider].cost += e.cost;
-      byProvider[e.provider].tokens += e.inputTokens + e.outputTokens;
-      byProvider[e.provider].calls++;
-
-      if (!byModel[e.model]) byModel[e.model] = { cost: 0, tokens: 0, calls: 0 };
-      byModel[e.model].cost += e.cost;
-      byModel[e.model].tokens += e.inputTokens + e.outputTokens;
-      byModel[e.model].calls++;
-    }
-
-    return { totalCost, totalTokens, byProvider, byModel, last30Days, totalCalls: entries.length };
   },
 
   clearEntries: () => {

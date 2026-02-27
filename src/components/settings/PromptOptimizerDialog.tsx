@@ -30,7 +30,7 @@ export function PromptOptimizerDialog({ open, onClose, functionId }: PromptOptim
   const [viewMode, setViewMode] = useState<'analysis' | 'diff' | 'full'>('analysis');
 
   const updateFunctionConfig = useAIFunctionsStore((s) => s.updateFunctionConfig);
-  const currentPrompt = useAIFunctionsStore((s) => s.getFunctionConfig(functionId).prompt);
+  const currentPrompt = useAIFunctionsStore((s) => s.functions.find((f) => f.id === functionId)?.prompt ?? '');
 
   const handleOptimize = async () => {
     setLoading(true);
