@@ -1,5 +1,6 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { parseMarkdown } from '@/services/markdownUtils';
 
 interface MarkdownPreviewProps {
@@ -61,13 +62,16 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
 
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
         components={{
-          // Render <details> as collapsible
+          // Render <details> as collapsible with styling
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          details: (props: any) => <details {...props} />,
+          details: (props: any) => (
+            <details className="my-4 rounded border bg-muted/20 p-4" {...props} />
+          ),
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           summary: (props: any) => (
-            <summary className="cursor-pointer font-medium" {...props} />
+            <summary className="cursor-pointer font-medium text-base mb-2" {...props} />
           ),
         }}
       >

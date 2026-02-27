@@ -59,8 +59,9 @@ export function PreviewPanel() {
     h1, h2, h3 { margin-top: 1.5em; }
     table { border-collapse: collapse; width: 100%; }
     th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    details { border: 1px solid #ddd; border-radius: 4px; padding: 1rem; margin: 1rem 0; }
-    summary { cursor: pointer; font-weight: bold; }
+    details { border: 1px solid #ddd; border-radius: 4px; padding: 1rem; margin: 1rem 0; background: #f9f9f9; }
+    summary { cursor: pointer; font-weight: bold; margin-bottom: 0.5rem; }
+    details p { line-height: 1.8; margin: 0.5em 0; }
     blockquote { border-left: 3px solid #ddd; padding-left: 1rem; color: #666; }
   </style>
 </head>
@@ -211,8 +212,8 @@ ${htmlContent}
         )}
       </Tabs>
 
-      {/* Export buttons */}
-      <div className="flex flex-wrap gap-1.5 border-t p-2">
+      {/* Export buttons — always visible */}
+      <div className="flex flex-wrap gap-1.5 border-t p-2 shrink-0">
         <Button
           variant="default"
           size="sm"

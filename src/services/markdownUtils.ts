@@ -97,7 +97,22 @@ export function assembleMarkdown(
     md += '\n---\n\n';
     md += '<details>\n';
     md += '<summary>原文 (Original)</summary>\n\n';
-    md += originalText.trim() + '\n\n';
+    // Preserve line breaks: convert single newlines to markdown line breaks (two trailing spaces)
+    // but keep blank lines as paragraph separators
+    const formattedOriginal = originalText
+      .trim()
+      .split('\n')
+      .map((line, i, arr) => {
+        // If next line is blank or this is the last line, no trailing spaces needed
+        if (i === arr.length - 1) return line
+        if (arr[i + 1].trim() === '') return line
+        // If this line is blank, keep as-is (paragraph separator)
+        if (line.trim() === '') return line
+        // Add two trailing spaces for markdown line break
+        return line + '  '
+      })
+      .join('\n')
+    md += formattedOriginal + '\n\n';
     md += '</details>\n';
   }
 
