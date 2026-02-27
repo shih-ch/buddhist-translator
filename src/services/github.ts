@@ -315,26 +315,21 @@ class GitHubService {
   async listResearchFiles(): Promise<ResearchFile[]> {
     const result: ResearchFile[] = []
     try {
-      const entries = await this.listDirectory('research')
-      for (const entry of entries) {
-        if (entry.type === 'dir') {
-          const subFiles = await this.listDirectory(entry.path)
-          for (const sub of subFiles) {
-            if (sub.type === 'file') {
-              result.push({
-                name: sub.name,
-                path: sub.path,
-                category: entry.name,
-              })
-            }
-          }
-        } else if (entry.type === 'file') {
-          result.push({
-            name: entry.name,
-            path: entry.path,
-            category: 'other',
-          })
-        }
+      // Use Git Tree API for proper Unicode filenames
+      const treeUrl = `${this.apiBase}/repos/${this.owner}/${this.repo}/git/trees/${this.branch}?recursive=1`
+      const res = await this.apiFetch(treeUrl)
+      const data = await res.json()
+      const researchItems: { path: string }[] = (data.tree ?? [])
+        .filter((item: { path: string; type: string }) =>
+          item.type === 'blob' && item.path.startsWith('research/')
+        )
+
+      for (const item of researchItems) {
+        // path is like "research/hayagriva/file.html" or "research/file.md"
+        const parts = item.path.split('/')
+        const name = parts[parts.length - 1]
+        const category = parts.length > 2 ? parts[1] : 'other'
+        result.push({ name, path: item.path, category })
       }
     } catch {
       // research/ may not exist
