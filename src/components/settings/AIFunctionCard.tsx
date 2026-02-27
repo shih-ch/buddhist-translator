@@ -21,7 +21,7 @@ interface AIFunctionCardProps {
 
 export function AIFunctionCard({ config }: AIFunctionCardProps) {
   const { updateFunctionConfig, resetFunctionPrompt } = useAIFunctionsStore()
-  const [promptExpanded, setPromptExpanded] = useState(false)
+  const [promptExpanded, setPromptExpanded] = useState(true)
 
   const providerModels = AI_PROVIDERS[config.provider]?.models ?? []
 
@@ -84,7 +84,9 @@ export function AIFunctionCard({ config }: AIFunctionCardProps) {
           </div>
           {promptExpanded && (
             <Textarea
+              rows={15}
               className="min-h-[240px] font-mono text-xs"
+              style={{ fieldSizing: 'fixed' } as React.CSSProperties}
               value={config.prompt}
               onChange={(e) => updateFunctionConfig(config.id, { prompt: e.target.value })}
             />

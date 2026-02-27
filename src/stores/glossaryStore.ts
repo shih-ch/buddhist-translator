@@ -1,6 +1,24 @@
 import { create } from 'zustand'
 import type { Glossary, GlossaryTerm } from '@/types/glossary'
 import { githubService } from '@/services/github'
+import { toast } from 'sonner'
+
+const CACHE_KEY = 'bt-glossary-cache'
+
+function saveToCache(glossary: Glossary) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(glossary))
+  } catch { /* ignore */ }
+}
+
+function loadFromCache(): Glossary | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
 
 interface GlossaryState {
   glossary: Glossary | null
@@ -16,8 +34,18 @@ interface GlossaryState {
   exportCsv: () => string
 }
 
+async function persistToGithub(updated: Glossary) {
+  saveToCache(updated)
+  try {
+    await githubService.saveGlossary(updated)
+  } catch (err) {
+    console.error('Failed to save glossary to GitHub:', err)
+    toast.error(`術語表同步失敗：${err instanceof Error ? err.message : 'Unknown error'}（本地已保存）`)
+  }
+}
+
 export const useGlossaryStore = create<GlossaryState>((set, get) => ({
-  glossary: null,
+  glossary: loadFromCache(),
   isLoading: false,
 
   fetchGlossary: async () => {
@@ -25,9 +53,23 @@ export const useGlossaryStore = create<GlossaryState>((set, get) => ({
     set({ isLoading: true })
     try {
       const glossary = await githubService.loadGlossary()
-      set({ glossary })
+      // Merge: use GitHub version if newer, otherwise keep local cache
+      const cached = get().glossary
+      if (cached && cached.terms.length > glossary.terms.length && cached.updated_at > glossary.updated_at) {
+        // Local has more terms and is newer — keep local and push to GitHub
+        await githubService.saveGlossary(cached).catch(() => {})
+        set({ glossary: cached })
+      } else {
+        set({ glossary })
+        saveToCache(glossary)
+      }
     } catch (err) {
       console.error('Failed to fetch glossary:', err)
+      // Fall back to cached version
+      const cached = loadFromCache()
+      if (cached && !get().glossary) {
+        set({ glossary: cached })
+      }
     } finally {
       set({ isLoading: false })
     }
@@ -41,7 +83,7 @@ export const useGlossaryStore = create<GlossaryState>((set, get) => ({
       terms: [...glossary.terms, term],
     }
     set({ glossary: updated })
-    await githubService.saveGlossary(updated)
+    await persistToGithub(updated)
   },
 
   updateTerm: async (id, updates) => {
@@ -53,7 +95,7 @@ export const useGlossaryStore = create<GlossaryState>((set, get) => ({
       terms: glossary.terms.map((t) => (t.id === id ? { ...t, ...updates } : t)),
     }
     set({ glossary: updated })
-    await githubService.saveGlossary(updated)
+    await persistToGithub(updated)
   },
 
   deleteTerm: async (id) => {
@@ -65,7 +107,7 @@ export const useGlossaryStore = create<GlossaryState>((set, get) => ({
       terms: glossary.terms.filter((t) => t.id !== id),
     }
     set({ glossary: updated })
-    await githubService.saveGlossary(updated)
+    await persistToGithub(updated)
   },
 
   addTermsBatch: async (terms) => {
@@ -76,7 +118,7 @@ export const useGlossaryStore = create<GlossaryState>((set, get) => ({
       terms: [...glossary.terms, ...terms],
     }
     set({ glossary: updated })
-    await githubService.saveGlossary(updated)
+    await persistToGithub(updated)
   },
 
   searchTerms: (query) => {

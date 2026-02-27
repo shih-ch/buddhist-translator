@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Square, Languages } from 'lucide-react';
+import { Send, Square, Languages, RotateCcw } from 'lucide-react';
 import { useTranslatorStore } from '@/stores/translatorStore';
 import { ModelSelector } from './ModelSelector';
 import { ChatMessage } from './ChatMessage';
@@ -18,6 +18,7 @@ export function ChatPanel() {
     sendMessage,
     adoptVersion,
     stopGeneration,
+    reset,
   } = useTranslatorStore();
   const [input, setInput] = useState('');
   const [showTermExtractor, setShowTermExtractor] = useState(false);
@@ -42,7 +43,9 @@ export function ChatPanel() {
   const handleTranslate = () => {
     const text = inputMode === 'import' ? importedText : originalText;
     if (!text.trim()) return;
-    sendMessage(text);
+    sendMessage(text).catch((err) => {
+      console.error('[Translate] sendMessage error:', err);
+    });
   };
 
   const handleAdopt = (messageId: string) => {
@@ -65,7 +68,7 @@ export function ChatPanel() {
       <ModelSelector />
 
       {/* Messages area */}
-      <ScrollArea className="flex-1" ref={scrollRef}>
+      <ScrollArea className="min-h-0 flex-1" ref={scrollRef}>
         <div className="space-y-3 p-3">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-sm text-muted-foreground">
@@ -96,29 +99,55 @@ export function ChatPanel() {
             翻譯
           </Button>
         ) : (
-          <div className="flex gap-2">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="輸入修正指令... (Ctrl+Enter 發送)"
-              className="min-h-[60px] resize-none text-sm"
-              disabled={isLoading}
-            />
-            <div className="flex flex-col gap-1">
-              {isLoading ? (
-                <Button variant="destructive" size="icon" onClick={stopGeneration}>
-                  <Square className="h-4 w-4" />
-                </Button>
-              ) : (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <Textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="輸入修正指令... (Ctrl+Enter 發送)"
+                className="min-h-[60px] resize-none text-sm"
+                disabled={isLoading}
+              />
+              <div className="flex flex-col gap-1">
+                {isLoading ? (
+                  <Button variant="destructive" size="icon" onClick={stopGeneration}>
+                    <Square className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    size="icon"
+                    onClick={handleSend}
+                    disabled={!input.trim()}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {hasSource && (
                 <Button
-                  size="icon"
-                  onClick={handleSend}
-                  disabled={!input.trim()}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  onClick={handleTranslate}
+                  disabled={isLoading}
                 >
-                  <Send className="h-4 w-4" />
+                  <Languages className="mr-1 h-3 w-3" />
+                  重新翻譯
                 </Button>
               )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+                onClick={() => { reset(); setInput(''); setAdoptedMessageId(null); }}
+                disabled={isLoading}
+              >
+                <RotateCcw className="mr-1 h-3 w-3" />
+                清除對話
+              </Button>
             </div>
           </div>
         )}

@@ -29,6 +29,14 @@ function encodeBase64(content: string): string {
   return btoa(binary)
 }
 
+/** Encode path for GitHub API: only encode URL-unsafe ASCII chars, keep Unicode as-is */
+function encodePath(path: string): string {
+  return path
+    .split('/')
+    .map((seg) => seg.replace(/[#?% ]/g, (c) => encodeURIComponent(c)))
+    .join('/')
+}
+
 // ─── Types ───
 
 interface FileEntry {
@@ -84,7 +92,7 @@ class GitHubService {
   // ─── Basic Operations ───
 
   async getFile(path: string): Promise<{ content: string; sha: string }> {
-    const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${encodeURIComponent(path)}?ref=${this.branch}`
+    const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${encodePath(path)}?ref=${this.branch}`
     const res = await this.apiFetch(url)
     const data = await res.json()
     return {
@@ -94,7 +102,7 @@ class GitHubService {
   }
 
   async listDirectory(path: string): Promise<FileEntry[]> {
-    const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${encodeURIComponent(path)}?ref=${this.branch}`
+    const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${encodePath(path)}?ref=${this.branch}`
     const res = await this.apiFetch(url)
     const data = await res.json()
     if (!Array.isArray(data)) return []
@@ -112,24 +120,53 @@ class GitHubService {
     message: string,
     sha?: string
   ): Promise<{ sha: string }> {
-    const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${encodeURIComponent(path)}`
-    const body: Record<string, string> = {
-      message,
-      content: encodeBase64(content),
-      branch: this.branch,
+    const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${encodePath(path)}`
+    const encoded = encodeBase64(content)
+
+    const attempt = async (currentSha?: string) => {
+      const body: Record<string, string> = {
+        message,
+        content: encoded,
+        branch: this.branch,
+      }
+      if (currentSha) body.sha = currentSha
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          Accept: 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+      return res
     }
-    if (sha) body.sha = sha
-    const res = await this.apiFetch(url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+
+    let res = await attempt(sha)
+
+    // On 409 SHA conflict, re-fetch latest SHA and retry once
+    if (res.status === 409) {
+      console.warn(`[GitHub] SHA conflict on ${path}, retrying with fresh SHA...`)
+      try {
+        const latest = await this.getFile(path)
+        res = await attempt(latest.sha)
+      } catch {
+        // File might have been deleted; retry without SHA
+        res = await attempt(undefined)
+      }
+    }
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`GitHub API ${res.status}: ${body}`)
+    }
+
     const data = await res.json()
     return { sha: data.content.sha }
   }
 
   async deleteFile(path: string, sha: string, message: string): Promise<void> {
-    const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${encodeURIComponent(path)}`
+    const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${encodePath(path)}`
     await this.apiFetch(url, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -163,29 +200,29 @@ class GitHubService {
   async listTranslations(): Promise<ArticleSummary[]> {
     const summaries: ArticleSummary[] = []
     try {
-      const years = await this.listDirectory('translations')
-      for (const year of years) {
-        if (year.type !== 'dir') continue
-        const months = await this.listDirectory(year.path)
-        for (const month of months) {
-          if (month.type !== 'dir') continue
-          const files = await this.listDirectory(month.path)
-          for (const file of files) {
-            if (file.type !== 'file' || !file.name.endsWith('.md')) continue
-            try {
-              const { content } = await this.getFile(file.path)
-              const fm = parseFrontmatterOnly(content)
-              if (fm) {
-                summaries.push(toSummary(file.path, fm))
-              }
-            } catch {
-              // Skip unreadable files
-            }
+      // Use Git Tree API to get proper Unicode paths (Contents API escapes non-ASCII)
+      const treeUrl = `${this.apiBase}/repos/${this.owner}/${this.repo}/git/trees/${this.branch}?recursive=1`
+      const res = await this.apiFetch(treeUrl)
+      const data = await res.json()
+      const mdFiles: string[] = (data.tree ?? [])
+        .filter((item: { path: string; type: string }) =>
+          item.type === 'blob' && item.path.startsWith('translations/') && item.path.endsWith('.md')
+        )
+        .map((item: { path: string }) => item.path)
+
+      for (const filePath of mdFiles) {
+        try {
+          const { content } = await this.getFile(filePath)
+          const fm = parseFrontmatterOnly(content)
+          if (fm) {
+            summaries.push(toSummary(filePath, fm))
           }
+        } catch (err) {
+          console.error(`[listTranslations] failed to read ${filePath}:`, err)
         }
       }
-    } catch {
-      // translations/ directory may not exist yet
+    } catch (err) {
+      console.error('[listTranslations] error:', err)
     }
     return summaries.sort((a, b) => b.date.localeCompare(a.date))
   }

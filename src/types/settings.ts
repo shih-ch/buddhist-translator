@@ -26,6 +26,7 @@ export interface TranslationParams {
   mantraTranslit: 'IAST' | 'keep_original' | 'if_possible';
   onlyVerseMantra: boolean;
   proofreadMode: 'off' | 'annotate_only' | 'allow_correction';
+  relayLanguage: 'none' | 'en' | 'ru';
 }
 
 export interface AppConfig {

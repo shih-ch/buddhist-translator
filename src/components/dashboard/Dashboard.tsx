@@ -1,10 +1,12 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Upload, BookOpen } from 'lucide-react'
+import { Plus, Upload, BookOpen, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Card, CardContent } from '@/components/ui/card'
 import { useArticlesStore } from '@/stores/articlesStore'
 import { useGlossaryStore } from '@/stores/glossaryStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 import { StatsCards } from './StatsCards'
 import { MonthlyChart } from './MonthlyChart'
 import { RecentArticles } from './RecentArticles'
@@ -13,11 +15,14 @@ export function Dashboard() {
   const navigate = useNavigate()
   const { articles, isLoading: articlesLoading, fetchArticles } = useArticlesStore()
   const { glossary, isLoading: glossaryLoading, fetchGlossary } = useGlossaryStore()
+  const githubToken = useSettingsStore((s) => s.githubToken)
 
   useEffect(() => {
-    fetchArticles()
-    fetchGlossary()
-  }, [fetchArticles, fetchGlossary])
+    if (githubToken) {
+      fetchArticles()
+      fetchGlossary()
+    }
+  }, [fetchArticles, fetchGlossary, githubToken])
 
   const isLoading = articlesLoading || glossaryLoading
   const termCount = glossary?.terms.length ?? 0
@@ -31,6 +36,28 @@ export function Dashboard() {
           ))}
         </div>
         <Skeleton className="h-64 rounded-xl" />
+      </div>
+    )
+  }
+
+  if (!githubToken) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-8">
+            <Settings className="h-8 w-8 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">請先在設定頁面填入 GitHub Token，才能載入統計資料</p>
+            <Button variant="outline" onClick={() => navigate('/settings')}>
+              前往設定
+            </Button>
+          </CardContent>
+        </Card>
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => navigate('/translator')}>
+            <Plus className="mr-2 h-4 w-4" />
+            新增翻譯
+          </Button>
+        </div>
       </div>
     )
   }

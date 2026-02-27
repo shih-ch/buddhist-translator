@@ -1,5 +1,55 @@
-import matter from 'gray-matter';
 import type { ArticleFrontmatter } from '@/types/article';
+
+// ─── Simple YAML frontmatter parser (browser-safe, no Buffer dependency) ───
+
+function parseFrontmatterRaw(md: string): { data: Record<string, unknown>; content: string } {
+  const match = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+  if (!match) return { data: {}, content: md };
+
+  const yaml = match[1];
+  const content = match[2];
+  const data: Record<string, unknown> = {};
+
+  let currentKey = '';
+  let currentArray: string[] | null = null;
+
+  for (const line of yaml.split('\n')) {
+    const arrayItem = line.match(/^\s+-\s+(.+)/);
+    if (arrayItem && currentKey) {
+      if (!currentArray) currentArray = [];
+      // Strip surrounding quotes
+      let val = arrayItem[1].trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      currentArray.push(val);
+      data[currentKey] = currentArray;
+      continue;
+    }
+
+    // Flush previous array
+    currentArray = null;
+
+    const kvMatch = line.match(/^(\w[\w_]*):\s*(.*)/);
+    if (kvMatch) {
+      currentKey = kvMatch[1];
+      let val = kvMatch[2].trim();
+      if (!val) {
+        // Could be start of an array
+        data[currentKey] = [];
+        currentArray = data[currentKey] as string[];
+        continue;
+      }
+      // Strip surrounding quotes
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      data[currentKey] = val;
+    }
+  }
+
+  return { data, content };
+}
 
 /**
  * Assemble a complete Markdown file: frontmatter + body + original text collapsible.
@@ -61,7 +111,7 @@ export function parseMarkdown(md: string): {
   content: string;
   originalText?: string;
 } {
-  const { data, content: body } = matter(md);
+  const { data, content: body } = parseFrontmatterRaw(md);
 
   const frontmatter: ArticleFrontmatter = {
     title: data.title ?? '',
@@ -120,7 +170,7 @@ export function generateFilePath(date: string, title: string): string {
  */
 export function parseFrontmatterOnly(raw: string): ArticleFrontmatter | null {
   try {
-    const { data } = matter(raw);
+    const { data } = parseFrontmatterRaw(raw);
     if (!data.title) return null;
     return {
       title: data.title ?? '',

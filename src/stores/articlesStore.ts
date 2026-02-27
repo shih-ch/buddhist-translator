@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { toast } from 'sonner'
 import type { ArticleSummary } from '@/types/article'
 import { githubService } from '@/services/github'
 import type { ResearchFile } from '@/services/github'
@@ -35,6 +36,7 @@ export const useArticlesStore = create<ArticlesState>((set, get) => ({
       set({ articles, lastFetched: Date.now() })
     } catch (err) {
       console.error('Failed to fetch articles:', err)
+      toast.error(`載入文章失敗：${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       set({ isLoading: false })
     }
@@ -46,6 +48,7 @@ export const useArticlesStore = create<ArticlesState>((set, get) => ({
       set({ researchFiles })
     } catch (err) {
       console.error('Failed to fetch research files:', err)
+      toast.error(`載入研究資料失敗：${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   },
 

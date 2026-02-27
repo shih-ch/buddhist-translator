@@ -7,6 +7,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ExternalLink, Eraser } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useTranslatorStore } from '@/stores/translatorStore';
 
 export function MetadataForm() {
@@ -14,14 +16,34 @@ export function MetadataForm() {
 
   return (
     <div className="grid grid-cols-2 gap-x-2 gap-y-2 p-3">
-      <div className="col-span-2">
-        <Label className="text-xs text-muted-foreground">標題</Label>
+      <div className="col-span-2 flex items-end gap-2">
+        <div className="flex-1">
+          <Label className="text-xs text-muted-foreground">標題</Label>
         <Input
           value={metadata.title}
           onChange={(e) => updateMetadata({ title: e.target.value })}
           placeholder="文章標題"
           className="h-8 text-sm"
         />
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2 text-xs text-muted-foreground"
+          title="清除所有欄位"
+          onClick={() => updateMetadata({
+            title: '',
+            author: '',
+            source: '',
+            date: new Date().toISOString().split('T')[0],
+            original_language: 'ru',
+            translator_model: '',
+            tags: [],
+          })}
+        >
+          <Eraser className="mr-1 h-3 w-3" />
+          清除
+        </Button>
       </div>
 
       <div>
@@ -46,12 +68,25 @@ export function MetadataForm() {
 
       <div>
         <Label className="text-xs text-muted-foreground">來源 URL</Label>
-        <Input
-          value={metadata.source}
-          onChange={(e) => updateMetadata({ source: e.target.value })}
-          placeholder="https://..."
-          className="h-8 text-sm"
-        />
+        <div className="flex items-center gap-1">
+          <Input
+            value={metadata.source}
+            onChange={(e) => updateMetadata({ source: e.target.value })}
+            placeholder="https://..."
+            className="h-8 text-sm"
+          />
+          {metadata.source && /^https?:\/\//.test(metadata.source) && (
+            <a
+              href={metadata.source}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-shrink-0 rounded p-1.5 text-muted-foreground hover:text-primary hover:bg-muted"
+              title="開啟連結"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          )}
+        </div>
       </div>
 
       <div>

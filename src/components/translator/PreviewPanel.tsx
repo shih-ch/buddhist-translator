@@ -75,6 +75,7 @@ ${htmlContent}
   };
 
   const handleSaveToGithub = async () => {
+    console.log('[Save] previewContent length:', previewContent.length, 'githubToken:', !!githubToken);
     if (!previewContent || !githubToken) {
       toast.error(githubToken ? '沒有可儲存的內容' : '請先在設定中填入 GitHub Token');
       return;
@@ -98,11 +99,11 @@ ${htmlContent}
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       <Tabs
         value={previewMode}
         onValueChange={(v) => setPreviewMode(v as 'rendered' | 'source')}
-        className="flex flex-col h-full"
+        className="flex min-h-0 flex-1 flex-col"
       >
         <div className="flex items-center justify-between px-3 py-1.5 border-b">
           <TabsList className="h-7">

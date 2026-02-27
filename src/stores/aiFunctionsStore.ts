@@ -13,7 +13,7 @@ const DEFAULT_FUNCTIONS: AIFunctionConfig[] = [
     name: '翻譯',
     description: '將佛學文章翻譯為繁體中文',
     provider: 'openai',
-    model: 'gpt-5.2-pro',
+    model: 'gpt-5.1',
     prompt: DEFAULT_TRANSLATION_PROMPT,
     defaultPrompt: DEFAULT_TRANSLATION_PROMPT,
   },
@@ -59,6 +59,7 @@ const DEFAULT_PRESETS: TranslationPreset[] = [
       mantraTranslit: 'IAST',
       onlyVerseMantra: false,
       proofreadMode: 'annotate_only',
+      relayLanguage: 'none',
     },
   },
   {
@@ -73,6 +74,7 @@ const DEFAULT_PRESETS: TranslationPreset[] = [
       mantraTranslit: 'IAST',
       onlyVerseMantra: false,
       proofreadMode: 'annotate_only',
+      relayLanguage: 'none',
     },
   },
   {
@@ -87,6 +89,7 @@ const DEFAULT_PRESETS: TranslationPreset[] = [
       mantraTranslit: 'IAST',
       onlyVerseMantra: true,
       proofreadMode: 'off',
+      relayLanguage: 'none',
     },
   },
   {
@@ -101,6 +104,7 @@ const DEFAULT_PRESETS: TranslationPreset[] = [
       mantraTranslit: 'IAST',
       onlyVerseMantra: false,
       proofreadMode: 'annotate_only',
+      relayLanguage: 'none',
     },
   },
 ]

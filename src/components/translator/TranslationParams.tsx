@@ -87,6 +87,26 @@ export function TranslationParams() {
               </div>
             )}
 
+            {/* Dropdown: relayLanguage */}
+            <div>
+              <Label className="text-xs">中轉語言</Label>
+              <Select
+                value={p.relayLanguage ?? 'none'}
+                onValueChange={(v) =>
+                  setTranslationParams({ relayLanguage: v as 'none' | 'en' | 'ru' })
+                }
+              >
+                <SelectTrigger className="mt-1 h-7 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">直譯（不中轉）</SelectItem>
+                  <SelectItem value="en">經英文中轉</SelectItem>
+                  <SelectItem value="ru">經俄文中轉</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Dropdown: tibetanTranslitMode */}
             <div>
               <Label className="text-xs">Tibetan 轉寫模式</Label>

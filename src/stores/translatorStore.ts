@@ -11,6 +11,7 @@ import { useGlossaryStore } from '@/stores/glossaryStore';
 import type { AIMessage } from '@/services/ai/types';
 import { AI_PROVIDERS } from '@/stores/aiModels';
 import { logTranslation } from '@/services/translationLogger';
+import { toast } from 'sonner';
 
 const DEFAULT_PARAMS: TranslationParams = {
   keepOriginalPerLine: true,
@@ -21,6 +22,7 @@ const DEFAULT_PARAMS: TranslationParams = {
   mantraTranslit: 'IAST',
   onlyVerseMantra: false,
   proofreadMode: 'annotate_only',
+  relayLanguage: 'none',
 };
 
 const DEFAULT_FRONTMATTER: ArticleFrontmatter = {
@@ -29,7 +31,7 @@ const DEFAULT_FRONTMATTER: ArticleFrontmatter = {
   source: '',
   date: new Date().toISOString().split('T')[0],
   original_language: 'ru',
-  translator_model: 'gpt-4o',
+  translator_model: '',
   tags: [],
 };
 
@@ -83,18 +85,64 @@ function genId() {
   return `msg-${++messageCounter}-${Date.now()}`;
 }
 
-/** Extract a title from translated content: first markdown heading, or first non-empty line */
-function extractTitle(content: string): string | null {
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    // Match markdown heading: # Title
-    const headingMatch = trimmed.match(/^#{1,3}\s+(.+)/);
-    if (headingMatch) return headingMatch[1].trim();
-    // Use first non-empty line as fallback
-    return trimmed;
+/** Use AI to extract metadata (title, author) from translated content */
+async function extractMetadataFromContent(
+  content: string,
+  originalText: string,
+  provider: AIProviderId,
+  model: string,
+  fields: { title: boolean; author: boolean },
+): Promise<{ title?: string; author?: string }> {
+  try {
+    const apiKeys = useSettingsStore.getState().apiKeys;
+    if (!apiKeys[provider]) return {};
+
+    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('translation');
+
+    const requests: string[] = [];
+    if (fields.title) requests.push('title: 根據內容生成一個簡潔的繁體中文標題');
+    if (fields.author) requests.push('author: 從原文或譯文中找出文章作者姓名（保留原文語言）');
+
+    const messages: AIMessage[] = [
+      {
+        role: 'system',
+        content: `你是佛學文章元資料提取器。請從以下內容中提取資訊。
+以 JSON 格式回覆，只包含以下欄位：
+${requests.join('\n')}
+
+只回覆 JSON，不要加其他說明。例如：{"title": "標題", "author": "作者"}`,
+      },
+      {
+        role: 'user',
+        content: `【譯文】\n${content.slice(0, 1500)}\n\n【原文】\n${originalText.slice(0, 1500)}`,
+      },
+    ];
+
+    const response = await callFunction(
+      { ...fnConfig, provider, model },
+      apiKeys,
+      messages,
+      { overrideProvider: provider, overrideModel: model },
+    );
+
+    // Parse JSON from response (handle markdown code blocks)
+    let text = response.content.trim();
+    const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlock) text = codeBlock[1].trim();
+
+    const parsed = JSON.parse(text);
+    const result: { title?: string; author?: string } = {};
+    if (fields.title && parsed.title) {
+      result.title = String(parsed.title).replace(/^["「『]|["」』]$/g, '');
+    }
+    if (fields.author && parsed.author) {
+      result.author = String(parsed.author).trim();
+    }
+    return result;
+  } catch (err) {
+    console.error('[extractMetadata] error:', err);
+    return {};
   }
-  return null;
 }
 
 export const useTranslatorStore = create<TranslatorState>((set, get) => ({
@@ -107,7 +155,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   activePreset: '一般文章',
   messages: [],
   isLoading: false,
-  currentModel: { provider: 'openai' as AIProviderId, model: 'gpt-5.2-pro' },
+  currentModel: { provider: 'openai' as AIProviderId, model: 'gpt-5.1' },
   totalTokens: 0,
   totalCost: 0,
   previewContent: '',
@@ -186,6 +234,51 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
       const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('translation');
       const glossaryTerms = useGlossaryStore.getState().glossary?.terms ?? [];
 
+      // ── Relay translation: first translate to intermediate language ──
+      const relay = state.translationParams.relayLanguage;
+      let textForTranslation = content;
+      if (relay && relay !== 'none' && state.messages.length === 0) {
+        const relayLangName = relay === 'en' ? 'English' : 'Russian';
+        const relayMessages: AIMessage[] = [
+          {
+            role: 'system',
+            content: `You are a professional translator. Translate the following text into ${relayLangName}. Preserve all formatting, paragraph breaks, and structure. Output only the translation.`,
+          },
+          { role: 'user', content },
+        ];
+
+        // Update UI to show relay progress
+        set((s) => {
+          const msgs = [...s.messages];
+          const last = msgs[msgs.length - 1];
+          if (last.id === assistantMsg.id) {
+            msgs[msgs.length - 1] = { ...last, content: `⏳ 中轉翻譯中（→ ${relayLangName}）...\n\n` };
+          }
+          return { messages: msgs };
+        });
+
+        const relayResponse = await callFunction(
+          fnConfig,
+          apiKeys,
+          relayMessages,
+          {
+            overrideProvider: state.currentModel.provider,
+            overrideModel: state.currentModel.model,
+          }
+        );
+        textForTranslation = relayResponse.content;
+
+        // Clear the progress message for the real translation
+        set((s) => {
+          const msgs = [...s.messages];
+          const last = msgs[msgs.length - 1];
+          if (last.id === assistantMsg.id) {
+            msgs[msgs.length - 1] = { ...last, content: '' };
+          }
+          return { messages: msgs };
+        });
+      }
+
       // Build chat history for translation context
       const chatHistory: AIMessage[] = state.messages.map((m) => ({
         role: m.role as 'user' | 'assistant' | 'system',
@@ -200,7 +293,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
       if (state.messages.length === 0) {
         messages = buildTranslationMessages(
           fnConfig.prompt,
-          content,
+          textForTranslation,
           state.translationParams,
           glossaryTerms,
           []
@@ -266,6 +359,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
         };
       });
     } catch (err) {
+      console.error('[sendMessage] API call error:', err);
       // Add error message to chat
       set((s) => {
         const msgs = [...s.messages];
@@ -284,18 +378,47 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     const msg = state.messages.find((m) => m.id === messageId);
     if (!msg) return;
 
-    // If title is empty, extract from translated content
-    let metadata = state.metadata;
-    if (!metadata.title.trim()) {
-      const extracted = extractTitle(msg.content);
-      if (extracted) {
-        metadata = { ...metadata, title: extracted };
-        set({ metadata });
-      }
-    }
+    // Set translator_model from the message's actual model (or current model)
+    const actualModel = msg.model || state.currentModel.model;
+    const metadata = { ...state.metadata, translator_model: actualModel };
+    set({ metadata });
 
+    // First, assemble with updated metadata
     const md = assembleMarkdown(metadata, msg.content, state.originalText || undefined);
     set({ previewContent: md });
+
+    // If title or author is empty, ask AI to extract from content
+    const needTitle = !metadata.title.trim();
+    const needAuthor = !metadata.author.trim();
+    if (needTitle || needAuthor) {
+      extractMetadataFromContent(
+        msg.content,
+        state.originalText,
+        state.currentModel.provider,
+        state.currentModel.model,
+        { title: needTitle, author: needAuthor },
+      ).then((extracted) => {
+        if (extracted.title || extracted.author) {
+          const updated = {
+            ...get().metadata,
+            ...(extracted.title ? { title: extracted.title } : {}),
+            ...(extracted.author ? { author: extracted.author } : {}),
+          };
+          set({ metadata: updated });
+          const newMd = assembleMarkdown(updated, msg.content, get().originalText || undefined);
+          set({ previewContent: newMd });
+          const parts: string[] = [];
+          if (extracted.title) parts.push(`標題：${extracted.title}`);
+          if (extracted.author) parts.push(`作者：${extracted.author}`);
+          toast.success(`已自動提取 ${parts.join('、')}`);
+        } else {
+          toast.info('無法從內容中提取標題/作者，請手動填寫');
+        }
+      }).catch((err) => {
+        console.error('[extractMetadata] failed:', err);
+        toast.error(`提取標題/作者失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
+      });
+    }
 
     // Log translation session to GitHub (fire-and-forget)
     const userMessages = state.messages.filter((m) => m.role === 'user');
@@ -350,7 +473,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
       activePreset: '一般文章',
       messages: [],
       isLoading: false,
-      currentModel: { provider: 'openai', model: 'gpt-5.2-pro' },
+      currentModel: { provider: 'openai', model: 'gpt-5.1' },
       totalTokens: 0,
       totalCost: 0,
       previewContent: '',

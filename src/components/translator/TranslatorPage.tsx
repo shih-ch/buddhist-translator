@@ -30,7 +30,7 @@ export function TranslatorPage() {
   }, [searchParams, githubToken, loadArticleForEdit, setInputMode]);
 
   return (
-    <div className="grid h-[calc(100vh-3.5rem)] grid-cols-[1fr_1.6fr_1.4fr] gap-0">
+    <div className="grid h-full grid-cols-[1fr_1.6fr_1.4fr] gap-0">
       {/* Left: Source Input */}
       <div className="flex flex-col overflow-hidden border-r">
         <SourceInput />

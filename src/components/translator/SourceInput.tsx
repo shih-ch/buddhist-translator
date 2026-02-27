@@ -29,7 +29,7 @@ export function SourceInput() {
           </TabsList>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-hidden">
           <TabsContent value="paste" className="mt-0 h-full">
             <PasteInput />
           </TabsContent>
