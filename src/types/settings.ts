@@ -1,5 +1,5 @@
 export type AIProviderId = 'openai' | 'anthropic' | 'google' | 'perplexity';
-export type AIFunctionId = 'translation' | 'formatting' | 'term_extraction' | 'url_cleanup';
+export type AIFunctionId = 'translation' | 'formatting' | 'term_extraction' | 'url_cleanup' | 'dictionary_lookup';
 
 export interface AIFunctionConfig {
   id: AIFunctionId;

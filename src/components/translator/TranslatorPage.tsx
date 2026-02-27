@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Layers } from 'lucide-react';
+import { Plus, Layers, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SourceInput } from './SourceInput';
 import { TranslationParams } from './TranslationParams';
 import { ChatPanel } from './ChatPanel';
 import { PreviewPanel } from './PreviewPanel';
 import { BatchPanel } from './BatchPanel';
+import { TMSuggestions } from './TMSuggestions';
+import { DictionaryPanel } from './DictionaryPanel';
 import { useTranslatorStore } from '@/stores/translatorStore';
 import { githubService } from '@/services/github';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -20,8 +22,10 @@ export function TranslatorPage() {
   const reset = useTranslatorStore((s) => s.reset);
   const editingArticle = useTranslatorStore((s) => s.editingArticle);
   const hasContent = useTranslatorStore((s) => s.originalText || s.messages.length > 0 || s.previewContent);
+  const originalText = useTranslatorStore((s) => s.originalText);
   const githubToken = useSettingsStore((s) => s.githubToken);
   const [batchOpen, setBatchOpen] = useState(false);
+  const [showDict, setShowDict] = useState(false);
 
   const handleNewTranslation = () => {
     reset();
@@ -51,6 +55,9 @@ export function TranslatorPage() {
               {editingArticle ? `編輯：${editingArticle.frontmatter.title}` : ''}
             </span>
             <div className="flex gap-1">
+              <Button variant="outline" size="xs" onClick={() => setShowDict(!showDict)}>
+                <BookOpen className="mr-1 h-3 w-3" />辭典
+              </Button>
               <Button variant="outline" size="xs" onClick={() => setBatchOpen(true)}>
                 <Layers className="mr-1 h-3 w-3" />批次
               </Button>
@@ -61,6 +68,10 @@ export function TranslatorPage() {
           </div>
         )}
         <SourceInput />
+        {/* TM Suggestions when original text is entered */}
+        {originalText.length > 50 && (
+          <TMSuggestions sourceText={originalText} />
+        )}
       </div>
 
       {/* Center: Params + Chat */}
@@ -69,9 +80,20 @@ export function TranslatorPage() {
         <ChatPanel />
       </div>
 
-      {/* Right: Preview & Export */}
+      {/* Right: Preview & Export + optional Dictionary */}
       <div className="flex flex-col overflow-hidden">
-        <PreviewPanel />
+        {showDict ? (
+          <div className="flex flex-col h-full">
+            <div className="flex-1 overflow-hidden border-b">
+              <PreviewPanel />
+            </div>
+            <div className="h-[300px] overflow-hidden">
+              <DictionaryPanel />
+            </div>
+          </div>
+        ) : (
+          <PreviewPanel />
+        )}
       </div>
 
       <BatchPanel open={batchOpen} onClose={() => setBatchOpen(false)} />

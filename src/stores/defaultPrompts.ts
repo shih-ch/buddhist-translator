@@ -208,6 +208,24 @@ export const DEFAULT_TERM_EXTRACTION_PROMPT = `你是佛學術語專家。從以
 【譯文】
 {translated_text}`
 
+export const DEFAULT_DICTIONARY_LOOKUP_PROMPT = `你是佛學術語辭典助手。使用者會提供一個梵文（Sanskrit）、藏文（Tibetan）、巴利文（Pali）或其他佛學術語。
+
+請回覆以下 JSON 格式：
+{
+  "term": "原始術語",
+  "etymology": "詞源解析（包含語根分析、構詞法）",
+  "definition": "詳細定義（包含在不同宗派/傳承中的含義）",
+  "chinese": "常見的繁體中文翻譯（列出所有常見譯名）",
+  "related": ["相關術語1", "相關術語2", "相關術語3"]
+}
+
+規則：
+1. etymology 要包含語言學分析（如梵文語根、藏文構詞）
+2. definition 要涵蓋主要佛教傳統（上座部、大乘、金剛乘）中的用法差異
+3. chinese 列出所有常見的中文翻譯
+4. related 列出 3-5 個相關術語
+5. 只回傳 JSON，不要加其他說明`
+
 export const DEFAULT_URL_CLEANUP_PROMPT = `以下是從網頁擷取的原始 HTML 文字內容，可能包含導覽列、廣告、sidebar 等雜訊。
 
 請執行以下任務：

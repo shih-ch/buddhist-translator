@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Copy, Github, FileText, FileCode, Check, Loader2 } from 'lucide-react';
+import { Download, Copy, Github, FileText, FileCode, Check, Loader2, FileType, FileSpreadsheet, Columns2, BookCheck, GitCompare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -9,11 +9,15 @@ import { generateSlug, parseMarkdown } from '@/services/markdownUtils';
 import { githubService } from '@/services/github';
 import { MarkdownPreview } from './MarkdownPreview';
 import { MarkdownEditor } from './MarkdownEditor';
+import { ParallelView } from './ParallelView';
+import { ConsistencyReport } from './ConsistencyReport';
+import { VersionCompare } from './VersionCompare';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { renderToString } from 'react-dom/server';
 import React from 'react';
+import { exportPDF, exportDOCX } from '@/services/exportFormats';
 
 export function PreviewPanel() {
   const previewContent = useTranslatorStore((s) => s.previewContent);
@@ -24,6 +28,9 @@ export function PreviewPanel() {
 
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showParallel, setShowParallel] = useState(false);
+  const [showConsistency, setShowConsistency] = useState(false);
+  const [showVersionCompare, setShowVersionCompare] = useState(false);
   const githubToken = useSettingsStore((s) => s.githubToken);
   const editingArticle = useTranslatorStore((s) => s.editingArticle);
   const originalText = useTranslatorStore((s) => s.originalText);
@@ -64,6 +71,31 @@ ${htmlContent}
     const slug = generateSlug(metadata.title || 'untitled');
     downloadFile(fullHtml, `${metadata.date}-${slug}.html`, 'text/html');
     toast.success('已下載 HTML');
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!previewContent) return;
+    try {
+      const htmlContent = renderToString(
+        React.createElement(ReactMarkdown, { remarkPlugins: [remarkGfm] }, previewContent)
+      );
+      const slug = generateSlug(metadata.title || 'untitled');
+      await exportPDF(htmlContent, metadata, `${metadata.date}-${slug}.pdf`);
+      toast.success('已下載 PDF');
+    } catch (err) {
+      toast.error(`PDF 匯出失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleDownloadDocx = async () => {
+    if (!previewContent) return;
+    try {
+      const slug = generateSlug(metadata.title || 'untitled');
+      await exportDOCX(previewContent, metadata, `${metadata.date}-${slug}.docx`);
+      toast.success('已下載 DOCX');
+    } catch (err) {
+      toast.error(`DOCX 匯出失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
   };
 
   const handleCopy = async () => {
@@ -116,20 +148,67 @@ ${htmlContent}
               原始碼
             </TabsTrigger>
           </TabsList>
+          <div className="flex gap-1">
+            {originalText && previewContent && (
+              <Button
+                variant={showParallel ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-6 text-xs px-2"
+                onClick={() => setShowParallel(!showParallel)}
+                title="雙欄對照"
+              >
+                <Columns2 className="size-3 mr-1" />
+                對照
+              </Button>
+            )}
+            {previewContent && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs px-2"
+                onClick={() => setShowConsistency(true)}
+                title="術語一致性檢查"
+              >
+                <BookCheck className="size-3" />
+              </Button>
+            )}
+            {editingArticle?.sha && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs px-2"
+                onClick={() => setShowVersionCompare(true)}
+                title="版本比較"
+              >
+                <GitCompare className="size-3" />
+              </Button>
+            )}
+          </div>
         </div>
 
-        <TabsContent value="rendered" className="flex-1 overflow-hidden mt-0">
-          <ScrollArea className="h-full">
-            <MarkdownPreview content={previewContent} />
-          </ScrollArea>
-        </TabsContent>
+        {showParallel ? (
+          <div className="flex-1 overflow-hidden">
+            <ParallelView
+              originalText={originalText}
+              translatedContent={previewContent}
+            />
+          </div>
+        ) : (
+          <>
+            <TabsContent value="rendered" className="flex-1 overflow-hidden mt-0">
+              <ScrollArea className="h-full">
+                <MarkdownPreview content={previewContent} />
+              </ScrollArea>
+            </TabsContent>
 
-        <TabsContent value="source" className="flex-1 overflow-hidden mt-0">
-          <MarkdownEditor
-            content={previewContent}
-            onChange={setPreviewContent}
-          />
-        </TabsContent>
+            <TabsContent value="source" className="flex-1 overflow-hidden mt-0">
+              <MarkdownEditor
+                content={previewContent}
+                onChange={setPreviewContent}
+              />
+            </TabsContent>
+          </>
+        )}
       </Tabs>
 
       {/* Export buttons */}
@@ -168,6 +247,26 @@ ${htmlContent}
           variant="outline"
           size="sm"
           className="text-xs"
+          onClick={handleDownloadPdf}
+          disabled={!previewContent}
+        >
+          <FileType className="size-3 mr-1" />
+          .pdf
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs"
+          onClick={handleDownloadDocx}
+          disabled={!previewContent}
+        >
+          <FileSpreadsheet className="size-3 mr-1" />
+          .docx
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs"
           onClick={handleCopy}
           disabled={!previewContent}
         >
@@ -175,6 +274,16 @@ ${htmlContent}
           {copied ? '已複製' : '複製'}
         </Button>
       </div>
+
+      {/* Dialogs */}
+      <ConsistencyReport
+        open={showConsistency}
+        onClose={() => setShowConsistency(false)}
+      />
+      <VersionCompare
+        open={showVersionCompare}
+        onClose={() => setShowVersionCompare(false)}
+      />
     </div>
   );
 }

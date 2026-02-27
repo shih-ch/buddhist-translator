@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>localStorage 遷移工具</title>
+  <style>
+    body { font-family: system-ui; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+    h2 { margin-bottom: 8px; }
+    .info { color: #666; font-size: 14px; margin-bottom: 20px; }
+    textarea { width: 100%; height: 120px; font-family: monospace; font-size: 12px; margin: 10px 0; }
+    button { padding: 8px 20px; font-size: 14px; cursor: pointer; margin-right: 8px; }
+    .success { color: green; font-weight: bold; }
+    .keys { font-size: 13px; color: #555; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <h2>localStorage 遷移工具</h2>
+  <p class="info">目前網址：<strong id="origin"></strong></p>
+
+  <h3>步驟 1：匯出（在舊 port 開啟此頁）</h3>
+  <button onclick="exportData()">讀取並複製</button>
+  <div id="exportInfo"></div>
+  <textarea id="data" placeholder="匯出的資料會顯示在這裡..."></textarea>
+
+  <h3>步驟 2：匯入（在新 port 開啟此頁）</h3>
+  <p class="info">把上面複製的內容貼到框中，然後按匯入。</p>
+  <button onclick="importData()">匯入到此 port</button>
+  <div id="importInfo"></div>
+
+  <script>
+    document.getElementById('origin').textContent = location.origin;
+
+    const BT_KEYS = [
+      'bt-api-keys', 'bt-github-token', 'bt-github-repo', 'bt-github-branch',
+      'bt-ai-functions', 'bt-translation-presets', 'bt-preferences',
+      'bt-glossary-cache', 'bt-prompt-history', 'bt-cost-tracking'
+    ];
+
+    function exportData() {
+      const result = {};
+      let count = 0;
+      for (const key of BT_KEYS) {
+        const val = localStorage.getItem(key);
+        if (val !== null) {
+          result[key] = val;
+          count++;
+        }
+      }
+      // Also grab any other bt- keys we might have missed
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('bt-') && !(key in result)) {
+          result[key] = localStorage.getItem(key);
+          count++;
+        }
+      }
+
+      if (count === 0) {
+        document.getElementById('exportInfo').innerHTML = '<p style="color:red">此 port 沒有找到任何 bt-* 資料。</p>';
+        return;
+      }
+
+      const json = JSON.stringify(result);
+      document.getElementById('data').value = json;
+      navigator.clipboard.writeText(json).then(() => {
+        document.getElementById('exportInfo').innerHTML =
+          '<p class="success">已複製到剪貼簿！找到 ' + count + ' 筆資料。</p>' +
+          '<div class="keys">Keys: ' + Object.keys(result).join(', ') + '</div>';
+      }).catch(() => {
+        document.getElementById('exportInfo').innerHTML =
+          '<p>找到 ' + count + ' 筆資料，請手動複製下方文字框內容。</p>';
+      });
+    }
+
+    function importData() {
+      const raw = document.getElementById('data').value.trim();
+      if (!raw) { alert('請先貼上匯出的資料'); return; }
+      try {
+        const data = JSON.parse(raw);
+        let count = 0;
+        for (const [key, val] of Object.entries(data)) {
+          localStorage.setItem(key, val);
+          count++;
+        }
+        document.getElementById('importInfo').innerHTML =
+          '<p class="success">匯入成功！共 ' + count + ' 筆。請重新整理主頁面。</p>';
+      } catch (e) {
+        alert('資料格式錯誤：' + e.message);
+      }
+    }
+  </script>
+</body>
+</html>

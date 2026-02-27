@@ -12,6 +12,7 @@ import type { AIMessage } from '@/services/ai/types';
 import { AI_PROVIDERS } from '@/stores/aiModels';
 import { logTranslation } from '@/services/translationLogger';
 import { useCostTrackingStore } from '@/stores/costTrackingStore';
+import { useTranslationMemoryStore } from '@/stores/translationMemoryStore';
 import { toast } from 'sonner';
 
 const DEFAULT_PARAMS: TranslationParams = {
@@ -396,6 +397,16 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     // First, assemble with updated metadata
     const md = assembleMarkdown(metadata, msg.content, state.originalText || undefined);
     set({ previewContent: md });
+
+    // Save to translation memory
+    if (state.originalText) {
+      useTranslationMemoryStore.getState().addEntry(
+        state.originalText,
+        msg.content,
+        state.metadata.original_language,
+        state.editingArticle?.path ?? '',
+      );
+    }
 
     // If title or author is empty, ask AI to extract from content
     const needTitle = !metadata.title.trim();

@@ -3,6 +3,7 @@ import { ApiKeySettings } from '@/components/settings/ApiKeySettings'
 import { GitHubSettings } from '@/components/settings/GitHubSettings'
 import { AIFunctionList } from '@/components/settings/AIFunctionList'
 import { ParamPresetEditor } from '@/components/settings/ParamPresetEditor'
+import { CorrectionShortcuts } from '@/components/settings/CorrectionShortcuts'
 import { DataExportImport } from '@/components/settings/DataExportImport'
 
 export default function SettingsPage() {
@@ -14,6 +15,7 @@ export default function SettingsPage() {
           <TabsTrigger value="github">GitHub</TabsTrigger>
           <TabsTrigger value="ai">AI 功能</TabsTrigger>
           <TabsTrigger value="presets">翻譯預設</TabsTrigger>
+          <TabsTrigger value="shortcuts">修正快捷</TabsTrigger>
         </TabsList>
 
         <TabsContent value="keys" className="mt-4">
@@ -30,6 +32,10 @@ export default function SettingsPage() {
 
         <TabsContent value="presets" className="mt-4">
           <ParamPresetEditor />
+        </TabsContent>
+
+        <TabsContent value="shortcuts" className="mt-4">
+          <CorrectionShortcuts />
         </TabsContent>
       </Tabs>
 

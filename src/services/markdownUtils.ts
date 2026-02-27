@@ -1,4 +1,5 @@
 import type { ArticleFrontmatter } from '@/types/article';
+import { getLanguageName } from '@/services/languageDetect';
 
 // ─── Simple YAML frontmatter parser (browser-safe, no Buffer dependency) ───
 
@@ -64,7 +65,7 @@ export function assembleMarkdown(
     author: frontmatter.author,
     source: frontmatter.source,
     date: frontmatter.date,
-    original_language: frontmatter.original_language,
+    original_language: getLanguageName(frontmatter.original_language) || frontmatter.original_language,
     translator_model: frontmatter.translator_model,
   };
   if (frontmatter.translation_mode) {

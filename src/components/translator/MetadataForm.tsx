@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -9,10 +10,25 @@ import {
 } from '@/components/ui/select';
 import { ExternalLink, Eraser } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useTranslatorStore } from '@/stores/translatorStore';
+import { detectLanguageAdvanced, getLanguageName } from '@/services/languageDetect';
 
 export function MetadataForm() {
   const { metadata, updateMetadata } = useTranslatorStore();
+  const originalText = useTranslatorStore((s) => s.originalText);
+
+  const detection = useMemo(
+    () => detectLanguageAdvanced(originalText),
+    [originalText]
+  );
+
+  // Auto-fill original_language when text changes and detection is confident
+  useEffect(() => {
+    if (detection.language !== 'other' && detection.confidence > 40) {
+      updateMetadata({ original_language: detection.language });
+    }
+  }, [detection.language, detection.confidence]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="grid grid-cols-2 gap-x-2 gap-y-2 p-3">
@@ -90,7 +106,14 @@ export function MetadataForm() {
       </div>
 
       <div>
-        <Label className="text-xs text-muted-foreground">原文語言</Label>
+        <Label className="text-xs text-muted-foreground">
+          原文語言
+          {detection.language !== 'other' && originalText.length > 20 && (
+            <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0 font-normal">
+              {getLanguageName(detection.language)} {detection.confidence}%
+            </Badge>
+          )}
+        </Label>
         <Select
           value={metadata.original_language}
           onValueChange={(v) => updateMetadata({ original_language: v })}
@@ -103,6 +126,8 @@ export function MetadataForm() {
             <SelectItem value="en">英文 (en)</SelectItem>
             <SelectItem value="bo">藏文 (bo)</SelectItem>
             <SelectItem value="zh">中文 (zh)</SelectItem>
+            <SelectItem value="sa">梵文 (sa)</SelectItem>
+            <SelectItem value="pi">巴利文 (pi)</SelectItem>
             <SelectItem value="other">其他</SelectItem>
           </SelectContent>
         </Select>

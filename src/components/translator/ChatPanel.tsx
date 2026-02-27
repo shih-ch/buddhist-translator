@@ -7,6 +7,7 @@ import { useTranslatorStore } from '@/stores/translatorStore';
 import { ModelSelector } from './ModelSelector';
 import { ChatMessage } from './ChatMessage';
 import { TermExtractor } from './TermExtractor';
+import { ShortcutPicker } from './ShortcutPicker';
 
 export function ChatPanel() {
   const {
@@ -123,6 +124,10 @@ export function ChatPanel() {
                     <Send className="h-4 w-4" />
                   </Button>
                 )}
+                <ShortcutPicker
+                  onInsert={(text) => setInput((prev) => prev + text)}
+                  disabled={isLoading}
+                />
               </div>
             </div>
             <div className="flex gap-2">

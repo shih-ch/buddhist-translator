@@ -5,6 +5,7 @@ import {
   DEFAULT_FORMATTING_PROMPT,
   DEFAULT_TERM_EXTRACTION_PROMPT,
   DEFAULT_URL_CLEANUP_PROMPT,
+  DEFAULT_DICTIONARY_LOOKUP_PROMPT,
 } from './defaultPrompts'
 import { usePromptHistoryStore } from './promptHistoryStore'
 
@@ -44,6 +45,15 @@ const DEFAULT_FUNCTIONS: AIFunctionConfig[] = [
     model: 'gpt-4.1-mini',
     prompt: DEFAULT_URL_CLEANUP_PROMPT,
     defaultPrompt: DEFAULT_URL_CLEANUP_PROMPT,
+  },
+  {
+    id: 'dictionary_lookup',
+    name: '佛學辭典',
+    description: '查詢梵文/藏文/巴利文佛學術語的詞源、定義與中文翻譯',
+    provider: 'openai',
+    model: 'gpt-4.1-mini',
+    prompt: DEFAULT_DICTIONARY_LOOKUP_PROMPT,
+    defaultPrompt: DEFAULT_DICTIONARY_LOOKUP_PROMPT,
   },
 ]
 
