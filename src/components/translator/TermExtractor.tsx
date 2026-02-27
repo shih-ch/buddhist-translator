@@ -123,6 +123,7 @@ export function TermExtractor({ open, onClose, messageId }: TermExtractorProps) 
       original: t.original,
       translation: t.translation,
       sanskrit: t.sanskrit || '',
+      language: 'sanskrit' as const,
       category: t.category as GlossaryTerm['category'],
       notes: t.notes || '',
       added_at: new Date().toISOString(),

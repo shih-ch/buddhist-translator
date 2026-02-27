@@ -17,7 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { GlossaryTerm } from '@/types/glossary'
+import type { GlossaryTerm, SourceLanguage } from '@/types/glossary'
+import { LANGUAGE_LABELS } from '@/types/glossary'
 import { CATEGORY_LABELS } from './GlossaryStats'
 
 interface TermEditorProps {
@@ -28,27 +29,34 @@ interface TermEditorProps {
 }
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as GlossaryTerm['category'][]
+const LANGUAGES = Object.keys(LANGUAGE_LABELS) as SourceLanguage[]
 
 export function TermEditor({ open, onOpenChange, term, onSave }: TermEditorProps) {
   const [original, setOriginal] = useState('')
   const [translation, setTranslation] = useState('')
   const [sanskrit, setSanskrit] = useState('')
+  const [language, setLanguage] = useState<SourceLanguage>('sanskrit')
   const [category, setCategory] = useState<GlossaryTerm['category']>('concept')
   const [notes, setNotes] = useState('')
+  const [sourceArticle, setSourceArticle] = useState('')
 
   useEffect(() => {
     if (term) {
       setOriginal(term.original)
       setTranslation(term.translation)
       setSanskrit(term.sanskrit)
+      setLanguage(term.language || 'sanskrit')
       setCategory(term.category)
       setNotes(term.notes)
+      setSourceArticle(term.source_article || '')
     } else {
       setOriginal('')
       setTranslation('')
       setSanskrit('')
+      setLanguage('sanskrit')
       setCategory('concept')
       setNotes('')
+      setSourceArticle('')
     }
   }, [term, open])
 
@@ -58,10 +66,11 @@ export function TermEditor({ open, onOpenChange, term, onSave }: TermEditorProps
       original,
       translation,
       sanskrit,
+      language,
       category,
       notes,
       added_at: term?.added_at ?? new Date().toISOString(),
-      source_article: term?.source_article ?? '',
+      source_article: sourceArticle,
     }
     onSave(saved)
     onOpenChange(false)
@@ -82,6 +91,21 @@ export function TermEditor({ open, onOpenChange, term, onSave }: TermEditorProps
               onChange={(e) => setOriginal(e.target.value)}
               placeholder="бодхичитта"
             />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="language">原文語言</Label>
+            <Select value={language} onValueChange={(v) => setLanguage(v as SourceLanguage)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LANGUAGES.map((l) => (
+                  <SelectItem key={l} value={l}>
+                    {LANGUAGE_LABELS[l]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="translation">中文翻譯</Label>
@@ -115,6 +139,15 @@ export function TermEditor({ open, onOpenChange, term, onSave }: TermEditorProps
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="source_article">來源文章</Label>
+            <Input
+              id="source_article"
+              value={sourceArticle}
+              onChange={(e) => setSourceArticle(e.target.value)}
+              placeholder="文章標題或 URL"
+            />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="notes">備註</Label>

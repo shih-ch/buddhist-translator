@@ -28,6 +28,7 @@ interface GlossaryState {
   addTerm: (term: GlossaryTerm) => Promise<void>
   updateTerm: (id: string, updates: Partial<GlossaryTerm>) => Promise<void>
   deleteTerm: (id: string) => Promise<void>
+  deleteTermsBatch: (ids: string[]) => Promise<void>
   addTermsBatch: (terms: GlossaryTerm[]) => Promise<void>
   searchTerms: (query: string) => GlossaryTerm[]
   getTermsByCategory: (category: string) => GlossaryTerm[]
@@ -110,6 +111,19 @@ export const useGlossaryStore = create<GlossaryState>((set, get) => ({
     await persistToGithub(updated)
   },
 
+  deleteTermsBatch: async (ids) => {
+    const glossary = get().glossary
+    if (!glossary) return
+    const idSet = new Set(ids)
+    const updated: Glossary = {
+      ...glossary,
+      updated_at: new Date().toISOString(),
+      terms: glossary.terms.filter((t) => !idSet.has(t.id)),
+    }
+    set({ glossary: updated })
+    await persistToGithub(updated)
+  },
+
   addTermsBatch: async (terms) => {
     const glossary = get().glossary ?? { version: 1, updated_at: '', terms: [] }
     const updated: Glossary = {
@@ -143,9 +157,9 @@ export const useGlossaryStore = create<GlossaryState>((set, get) => ({
   exportCsv: () => {
     const glossary = get().glossary
     if (!glossary) return ''
-    const header = 'original,translation,sanskrit,category,notes'
+    const header = 'original,translation,sanskrit,language,category,notes,source_article'
     const rows = glossary.terms.map((t) =>
-      [t.original, t.translation, t.sanskrit, t.category, t.notes]
+      [t.original, t.translation, t.sanskrit, t.language || '', t.category, t.notes, t.source_article || '']
         .map((v) => `"${v.replace(/"/g, '""')}"`)
         .join(',')
     )

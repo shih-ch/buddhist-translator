@@ -16,8 +16,10 @@ import { GlossaryStats, CATEGORY_LABELS } from './GlossaryStats'
 import { TermList } from './TermList'
 import { TermEditor } from './TermEditor'
 import type { GlossaryTerm } from '@/types/glossary'
+import { LANGUAGE_LABELS } from '@/types/glossary'
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS)
+const ALL_LANGUAGES = Object.keys(LANGUAGE_LABELS)
 
 export function GlossaryPageContent() {
   const {
@@ -27,11 +29,13 @@ export function GlossaryPageContent() {
     addTerm,
     updateTerm,
     deleteTerm,
+    deleteTermsBatch,
     exportCsv,
   } = useGlossaryStore()
 
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('__all__')
+  const [languageFilter, setLanguageFilter] = useState('__all__')
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingTerm, setEditingTerm] = useState<GlossaryTerm | null>(null)
 
@@ -44,6 +48,7 @@ export function GlossaryPageContent() {
   const filtered = useMemo(() => {
     return allTerms.filter((t) => {
       if (categoryFilter !== '__all__' && t.category !== categoryFilter) return false
+      if (languageFilter !== '__all__' && (t.language || '') !== languageFilter) return false
       if (search) {
         const q = search.toLowerCase()
         return (
@@ -54,7 +59,7 @@ export function GlossaryPageContent() {
       }
       return true
     })
-  }, [allTerms, search, categoryFilter])
+  }, [allTerms, search, categoryFilter, languageFilter])
 
   const handleSave = async (term: GlossaryTerm) => {
     if (editingTerm) {
@@ -119,6 +124,19 @@ export function GlossaryPageContent() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={languageFilter} onValueChange={setLanguageFilter}>
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="所有語言" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">所有語言</SelectItem>
+            {ALL_LANGUAGES.map((l) => (
+              <SelectItem key={l} value={l}>
+                {LANGUAGE_LABELS[l as keyof typeof LANGUAGE_LABELS]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="ml-auto flex gap-2">
           <Button variant="outline" onClick={handleExport} disabled={allTerms.length === 0}>
             <Download className="mr-2 h-4 w-4" />
@@ -133,7 +151,7 @@ export function GlossaryPageContent() {
 
       <Card>
         <CardContent className="p-0">
-          <TermList terms={filtered} onEdit={handleEdit} onDelete={deleteTerm} />
+          <TermList terms={filtered} onEdit={handleEdit} onDelete={deleteTerm} onDeleteBatch={deleteTermsBatch} />
         </CardContent>
       </Card>
 
