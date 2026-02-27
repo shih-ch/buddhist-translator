@@ -23,6 +23,7 @@ const defaultParams: TranslationParams = {
   mantraTranslit: 'IAST',
   onlyVerseMantra: false,
   proofreadMode: 'off',
+  relayLanguage: 'none',
 }
 
 function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {

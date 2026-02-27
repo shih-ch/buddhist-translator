@@ -113,14 +113,15 @@ export function parseMarkdown(md: string): {
 } {
   const { data, content: body } = parseFrontmatterRaw(md);
 
+  const s = (v: unknown): string => (v == null ? '' : String(v));
   const frontmatter: ArticleFrontmatter = {
-    title: data.title ?? '',
-    author: data.author ?? '',
-    source: data.source ?? '',
-    date: data.date instanceof Date ? data.date.toISOString().split('T')[0] : (data.date ?? ''),
-    original_language: data.original_language ?? '',
-    translator_model: data.translator_model ?? '',
-    translation_mode: data.translation_mode,
+    title: s(data.title),
+    author: s(data.author),
+    source: s(data.source),
+    date: data.date instanceof Date ? data.date.toISOString().split('T')[0] : s(data.date),
+    original_language: s(data.original_language),
+    translator_model: s(data.translator_model),
+    translation_mode: data.translation_mode as string | undefined,
     tags: Array.isArray(data.tags) ? data.tags : [],
   };
 
@@ -172,14 +173,15 @@ export function parseFrontmatterOnly(raw: string): ArticleFrontmatter | null {
   try {
     const { data } = parseFrontmatterRaw(raw);
     if (!data.title) return null;
+    const s = (v: unknown): string => (v == null ? '' : String(v));
     return {
-      title: data.title ?? '',
-      author: data.author ?? '',
-      source: data.source ?? '',
-      date: data.date instanceof Date ? data.date.toISOString().split('T')[0] : (data.date ?? ''),
-      original_language: data.original_language ?? '',
-      translator_model: data.translator_model ?? '',
-      translation_mode: data.translation_mode,
+      title: s(data.title),
+      author: s(data.author),
+      source: s(data.source),
+      date: data.date instanceof Date ? data.date.toISOString().split('T')[0] : s(data.date),
+      original_language: s(data.original_language),
+      translator_model: s(data.translator_model),
+      translation_mode: data.translation_mode as string | undefined,
       tags: Array.isArray(data.tags) ? data.tags : [],
     };
   } catch {

@@ -15,6 +15,7 @@ const PRESETS: { name: string; icon: string; params: TranslationParams }[] = [
       mantraTranslit: 'IAST',
       onlyVerseMantra: false,
       proofreadMode: 'annotate_only',
+      relayLanguage: 'none',
     },
   },
   {
@@ -29,6 +30,7 @@ const PRESETS: { name: string; icon: string; params: TranslationParams }[] = [
       mantraTranslit: 'IAST',
       onlyVerseMantra: false,
       proofreadMode: 'annotate_only',
+      relayLanguage: 'none',
     },
   },
   {
@@ -43,6 +45,7 @@ const PRESETS: { name: string; icon: string; params: TranslationParams }[] = [
       mantraTranslit: 'IAST',
       onlyVerseMantra: true,
       proofreadMode: 'off',
+      relayLanguage: 'none',
     },
   },
   {
@@ -57,6 +60,7 @@ const PRESETS: { name: string; icon: string; params: TranslationParams }[] = [
       mantraTranslit: 'IAST',
       onlyVerseMantra: false,
       proofreadMode: 'annotate_only',
+      relayLanguage: 'none',
     },
   },
 ];
