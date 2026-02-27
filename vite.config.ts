@@ -7,8 +7,7 @@ export default defineConfig({
   base: '/buddhist-translator/',
   plugins: [react(), tailwindcss()],
   server: {
-    port: 5178,
-    strictPort: true,
+    port: 5176,
   },
   resolve: {
     alias: {
