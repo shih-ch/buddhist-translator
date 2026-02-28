@@ -223,7 +223,9 @@ export function TermList({ terms, onEdit, onDelete, onDeleteBatch }: TermListPro
                       <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
-                  <TableCell>{t.translation}</TableCell>
+                  <TableCell className={(t.notes || '').includes('[AI翻譯]') ? 'text-blue-500' : undefined}>
+                    {t.translation}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{t.sanskrit || '-'}</TableCell>
                   <TableCell>
                     <Badge variant="outline">

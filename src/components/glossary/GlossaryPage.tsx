@@ -98,6 +98,7 @@ export function GlossaryPageContent() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [import84000Open, setImport84000Open] = useState(false)
   const [batchFillOpen, setBatchFillOpen] = useState(false)
+  const [aiFilter, setAiFilter] = useState(false)
 
   useEffect(() => {
     fetchGlossary()
@@ -110,11 +111,13 @@ export function GlossaryPageContent() {
 
   const allTerms = glossary?.terms ?? []
   const emptyTranslationCount = useMemo(() => allTerms.filter((t) => !t.translation.trim()).length, [allTerms])
+  const aiTranslatedCount = useMemo(() => allTerms.filter((t) => (t.notes || '').includes('[AI翻譯]')).length, [allTerms])
 
   const filtered = useMemo(() => {
     return allTerms.filter((t) => {
       if (categoryFilter !== '__all__' && t.category !== categoryFilter) return false
       if (languageFilter !== '__all__' && (t.language || '') !== languageFilter) return false
+      if (aiFilter && !(t.notes || '').includes('[AI翻譯]')) return false
       if (debouncedSearch) {
         const q = debouncedSearch.toLowerCase()
         return (
@@ -129,7 +132,7 @@ export function GlossaryPageContent() {
       }
       return true
     })
-  }, [allTerms, debouncedSearch, categoryFilter, languageFilter])
+  }, [allTerms, debouncedSearch, categoryFilter, languageFilter, aiFilter])
 
   const handleSave = async (term: GlossaryTerm) => {
     if (editingTerm) {
@@ -268,6 +271,16 @@ export function GlossaryPageContent() {
             ))}
           </SelectContent>
         </Select>
+        {aiTranslatedCount > 0 && (
+          <Button
+            variant={aiFilter ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setAiFilter(!aiFilter)}
+          >
+            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+            AI 翻譯 ({aiTranslatedCount})
+          </Button>
+        )}
         <div className="ml-auto flex gap-2">
           <input
             ref={fileInputRef}
