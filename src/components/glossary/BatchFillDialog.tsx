@@ -34,6 +34,7 @@ interface BatchProgress {
 export function BatchFillDialog({ open, onOpenChange }: BatchFillDialogProps) {
   const glossary = useGlossaryStore((s) => s.glossary)
   const updateTermsBatch = useGlossaryStore((s) => s.updateTermsBatch)
+  const syncToGithub = useGlossaryStore((s) => s.syncToGithub)
   const cancelledRef = useRef(false)
 
   const [progress, setProgress] = useState<BatchProgress>({
@@ -102,7 +103,7 @@ export function BatchFillDialog({ open, onOpenChange }: BatchFillDialogProps) {
         }
 
         if (updates.length > 0) {
-          await updateTermsBatch(updates)
+          await updateTermsBatch(updates, true)
         }
 
         totalSuccess += updates.length
@@ -120,11 +121,16 @@ export function BatchFillDialog({ open, onOpenChange }: BatchFillDialogProps) {
       }))
     }
 
+    // Sync to GitHub once at the end (avoid repeated writes causing SHA conflicts)
+    if (totalSuccess > 0) {
+      await syncToGithub()
+    }
+
     if (!cancelledRef.current) {
       setProgress((p) => ({ ...p, status: 'done' }))
       toast.success(`AI 補齊完成：成功 ${totalSuccess} 筆，失敗 ${totalFail} 筆`)
     }
-  }, [emptyTerms, updateTermsBatch])
+  }, [emptyTerms, updateTermsBatch, syncToGithub])
 
   const handleCancel = () => {
     cancelledRef.current = true

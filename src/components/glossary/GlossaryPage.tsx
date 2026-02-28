@@ -123,7 +123,8 @@ export function GlossaryPageContent() {
           t.sanskrit.toLowerCase().includes(q) ||
           (t.tibetan || '').toLowerCase().includes(q) ||
           (t.wylie || '').toLowerCase().includes(q) ||
-          (t.definition || '').toLowerCase().includes(q)
+          (t.definition || '').toLowerCase().includes(q) ||
+          (t.notes || '').toLowerCase().includes(q)
         )
       }
       return true

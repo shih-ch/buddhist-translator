@@ -41,7 +41,8 @@ interface GlossaryState {
   deleteTerm: (id: string) => Promise<void>
   deleteTermsBatch: (ids: string[]) => Promise<void>
   addTermsBatch: (terms: GlossaryTerm[]) => Promise<void>
-  updateTermsBatch: (updates: { id: string; updates: Partial<GlossaryTerm> }[]) => Promise<void>
+  updateTermsBatch: (updates: { id: string; updates: Partial<GlossaryTerm> }[], skipSync?: boolean) => Promise<void>
+  syncToGithub: () => Promise<void>
   searchTerms: (query: string) => GlossaryTerm[]
   getTermsByCategory: (category: string) => GlossaryTerm[]
   exportCsv: () => string
@@ -160,7 +161,7 @@ export const useGlossaryStore = create<GlossaryState>((set, get) => ({
     await persistToGithub(updated)
   },
 
-  updateTermsBatch: async (updates) => {
+  updateTermsBatch: async (updates, skipSync) => {
     const glossary = get().glossary
     if (!glossary || updates.length === 0) return
     const updateMap = new Map(updates.map((u) => [u.id, u.updates]))
@@ -173,7 +174,17 @@ export const useGlossaryStore = create<GlossaryState>((set, get) => ({
       }),
     }
     set({ glossary: updated })
-    await persistToGithub(updated)
+    if (skipSync) {
+      saveToCache(updated)
+    } else {
+      await persistToGithub(updated)
+    }
+  },
+
+  syncToGithub: async () => {
+    const glossary = get().glossary
+    if (!glossary) return
+    await persistToGithub(glossary)
   },
 
   searchTerms: (query) => {
