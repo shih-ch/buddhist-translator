@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Download, Upload } from 'lucide-react'
+import { Plus, Download, Upload, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,6 +18,7 @@ import { TermEditor } from './TermEditor'
 import type { GlossaryTerm } from '@/types/glossary'
 import { LANGUAGE_LABELS } from '@/types/glossary'
 import { toast } from 'sonner'
+import { Import84000Dialog } from './Import84000Dialog'
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS)
 const ALL_LANGUAGES = Object.keys(LANGUAGE_LABELS)
@@ -93,6 +94,7 @@ export function GlossaryPageContent() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingTerm, setEditingTerm] = useState<GlossaryTerm | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [import84000Open, setImport84000Open] = useState(false)
 
   useEffect(() => {
     fetchGlossary()
@@ -261,6 +263,10 @@ export function GlossaryPageContent() {
             <Upload className="mr-2 h-4 w-4" />
             匯入 CSV
           </Button>
+          <Button variant="outline" onClick={() => setImport84000Open(true)}>
+            <BookOpen className="mr-2 h-4 w-4" />
+            匯入 84000
+          </Button>
           <Button variant="outline" onClick={handleExport} disabled={allTerms.length === 0}>
             <Download className="mr-2 h-4 w-4" />
             匯出 CSV
@@ -284,6 +290,8 @@ export function GlossaryPageContent() {
         term={editingTerm}
         onSave={handleSave}
       />
+
+      <Import84000Dialog open={import84000Open} onOpenChange={setImport84000Open} />
     </div>
   )
 }
