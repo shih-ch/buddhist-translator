@@ -5,6 +5,7 @@ import { PasteInput } from './PasteInput';
 import { UrlInput } from './UrlInput';
 import { ImportInput } from './ImportInput';
 import { OCRInput } from './OCRInput';
+import { CBETAInput } from './CBETAInput';
 import { MetadataForm } from './MetadataForm';
 
 export function SourceInput() {
@@ -14,7 +15,7 @@ export function SourceInput() {
   const handleTabChange = (v: string) => {
     setActiveTab(v);
     if (v !== 'ocr') {
-      setInputMode(v as 'paste' | 'url' | 'import');
+      setInputMode(v as 'paste' | 'url' | 'import' | 'cbeta');
     }
   };
 
@@ -33,6 +34,9 @@ export function SourceInput() {
             <TabsTrigger value="url" className="flex-1 text-xs">
               給網址
             </TabsTrigger>
+            <TabsTrigger value="cbeta" className="flex-1 text-xs">
+              大正藏
+            </TabsTrigger>
             <TabsTrigger value="import" className="flex-1 text-xs">
               匯入成品
             </TabsTrigger>
@@ -48,6 +52,9 @@ export function SourceInput() {
           </TabsContent>
           <TabsContent value="url" className="mt-0 h-full">
             <UrlInput />
+          </TabsContent>
+          <TabsContent value="cbeta" className="mt-0 h-full">
+            <CBETAInput />
           </TabsContent>
           <TabsContent value="import" className="mt-0 h-full">
             <ImportInput />

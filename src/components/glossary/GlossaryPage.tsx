@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Plus, Download } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Plus, Download, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -17,9 +17,62 @@ import { TermList } from './TermList'
 import { TermEditor } from './TermEditor'
 import type { GlossaryTerm } from '@/types/glossary'
 import { LANGUAGE_LABELS } from '@/types/glossary'
+import { toast } from 'sonner'
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS)
 const ALL_LANGUAGES = Object.keys(LANGUAGE_LABELS)
+
+/** Parse CSV text into array of records, handling quoted fields and BOM */
+function parseCSV(text: string): Record<string, string>[] {
+  // Strip BOM
+  const clean = text.replace(/^\uFEFF/, '');
+  const lines = clean.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+
+  const parseRow = (row: string): string[] => {
+    const fields: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < row.length; i++) {
+      const ch = row[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (row[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          current += ch;
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true;
+        } else if (ch === ',') {
+          fields.push(current);
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+    }
+    fields.push(current);
+    return fields;
+  };
+
+  const headers = parseRow(lines[0]).map((h) => h.trim().toLowerCase());
+  const rows: Record<string, string>[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseRow(lines[i]);
+    const record: Record<string, string> = {};
+    headers.forEach((h, idx) => {
+      record[h] = (values[idx] ?? '').trim();
+    });
+    rows.push(record);
+  }
+  return rows;
+}
 
 export function GlossaryPageContent() {
   const {
@@ -27,6 +80,7 @@ export function GlossaryPageContent() {
     isLoading,
     fetchGlossary,
     addTerm,
+    addTermsBatch,
     updateTerm,
     deleteTerm,
     deleteTermsBatch,
@@ -38,6 +92,7 @@ export function GlossaryPageContent() {
   const [languageFilter, setLanguageFilter] = useState('__all__')
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingTerm, setEditingTerm] = useState<GlossaryTerm | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchGlossary()
@@ -91,6 +146,63 @@ export function GlossaryPageContent() {
     URL.revokeObjectURL(url)
   }
 
+  const handleImportCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    // Reset input so the same file can be selected again
+    e.target.value = ''
+
+    try {
+      const text = await file.text()
+      const rows = parseCSV(text)
+      if (rows.length === 0) {
+        toast.error('CSV 檔案無有效資料')
+        return
+      }
+
+      const existingOriginals = new Set(
+        (glossary?.terms ?? []).map((t) => t.original.toLowerCase()),
+      )
+
+      const newTerms: GlossaryTerm[] = []
+      let skipped = 0
+
+      for (const row of rows) {
+        const original = row.original || row['原文'] || ''
+        const translation = row.translation || row['翻譯'] || row['譯文'] || ''
+        if (!original || !translation) continue
+
+        if (existingOriginals.has(original.toLowerCase())) {
+          skipped++
+          continue
+        }
+        existingOriginals.add(original.toLowerCase())
+
+        const validCategories = ['concept', 'person', 'place', 'practice', 'text', 'deity', 'mantra']
+        const cat = row.category || row['分類'] || 'concept'
+
+        newTerms.push({
+          id: crypto.randomUUID(),
+          original,
+          translation,
+          sanskrit: row.sanskrit || row['梵文'] || '',
+          language: (row.language || row['語言'] || 'sanskrit') as GlossaryTerm['language'],
+          category: (validCategories.includes(cat) ? cat : 'concept') as GlossaryTerm['category'],
+          notes: row.notes || row['備註'] || '',
+          added_at: new Date().toISOString(),
+          source_article: row.source_article || row['來源'] || '',
+        })
+      }
+
+      if (newTerms.length > 0) {
+        await addTermsBatch(newTerms)
+      }
+      toast.success(`已匯入 ${newTerms.length} 筆術語${skipped > 0 ? `，跳過 ${skipped} 筆重複` : ''}`)
+    } catch (err) {
+      toast.error(`匯入失敗：${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
   if (isLoading && !glossary) {
     return (
       <div className="space-y-4">
@@ -138,6 +250,17 @@ export function GlossaryPageContent() {
           </SelectContent>
         </Select>
         <div className="ml-auto flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={handleImportCsv}
+          />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="mr-2 h-4 w-4" />
+            匯入 CSV
+          </Button>
           <Button variant="outline" onClick={handleExport} disabled={allTerms.length === 0}>
             <Download className="mr-2 h-4 w-4" />
             匯出 CSV

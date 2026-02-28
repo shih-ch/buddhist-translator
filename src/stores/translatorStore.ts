@@ -15,6 +15,30 @@ import { useCostTrackingStore } from '@/stores/costTrackingStore';
 import { useTranslationMemoryStore } from '@/stores/translationMemoryStore';
 import { toast } from 'sonner';
 
+export interface SavedVersion {
+  id: string;
+  name: string;
+  content: string;
+  model: string;
+  provider: string;
+  timestamp: number;
+}
+
+const VERSIONS_KEY_PREFIX = 'bt-saved-versions';
+
+function loadVersions(): SavedVersion[] {
+  try {
+    const raw = localStorage.getItem(VERSIONS_KEY_PREFIX);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function persistVersions(versions: SavedVersion[]) {
+  try {
+    localStorage.setItem(VERSIONS_KEY_PREFIX, JSON.stringify(versions));
+  } catch { /* ignore */ }
+}
+
 const DEFAULT_PARAMS: TranslationParams = {
   keepOriginalPerLine: true,
   narrativePerLine: false,
@@ -39,7 +63,7 @@ const DEFAULT_FRONTMATTER: ArticleFrontmatter = {
 
 interface TranslatorState {
   // Input
-  inputMode: 'paste' | 'url' | 'import';
+  inputMode: 'paste' | 'url' | 'import' | 'cbeta';
   originalText: string;
   importedText: string;
   metadata: ArticleFrontmatter;
@@ -59,6 +83,9 @@ interface TranslatorState {
   previewContent: string;
   previewMode: 'rendered' | 'source';
 
+  // Versions
+  savedVersions: SavedVersion[];
+
   // Editing (from Articles page)
   editingArticle: Article | null;
 
@@ -66,7 +93,7 @@ interface TranslatorState {
   abortController: AbortController | null;
 
   // Actions
-  setInputMode: (mode: 'paste' | 'url' | 'import') => void;
+  setInputMode: (mode: 'paste' | 'url' | 'import' | 'cbeta') => void;
   setOriginalText: (text: string) => void;
   setImportedText: (text: string) => void;
   updateMetadata: (updates: Partial<ArticleFrontmatter>) => void;
@@ -80,6 +107,9 @@ interface TranslatorState {
   loadArticleForEdit: (article: Article) => void;
   stopGeneration: () => void;
   reset: () => void;
+  saveVersion: (name?: string) => void;
+  loadVersion: (index: number) => void;
+  deleteVersion: (index: number) => void;
 }
 
 let messageCounter = 0;
@@ -162,6 +192,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   totalCost: 0,
   previewContent: '',
   previewMode: 'rendered',
+  savedVersions: loadVersions(),
   editingArticle: null,
   abortController: null,
 
@@ -505,6 +536,40 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     }
   },
 
+  saveVersion: (name?: string) => {
+    const state = get();
+    if (!state.previewContent) return;
+    const version: SavedVersion = {
+      id: crypto.randomUUID(),
+      name: name || `${state.currentModel.model} 翻譯 #${state.savedVersions.length + 1}`,
+      content: state.previewContent,
+      model: state.currentModel.model,
+      provider: state.currentModel.provider,
+      timestamp: Date.now(),
+    };
+    const updated = [...state.savedVersions, version];
+    set({ savedVersions: updated });
+    persistVersions(updated);
+    toast.success(`已儲存版本：${version.name}`);
+  },
+
+  loadVersion: (index: number) => {
+    const versions = get().savedVersions;
+    if (index < 0 || index >= versions.length) return;
+    set({ previewContent: versions[index].content });
+    toast.success(`已載入版本：${versions[index].name}`);
+  },
+
+  deleteVersion: (index: number) => {
+    const versions = [...get().savedVersions];
+    if (index < 0 || index >= versions.length) return;
+    const name = versions[index].name;
+    versions.splice(index, 1);
+    set({ savedVersions: versions });
+    persistVersions(versions);
+    toast.success(`已刪除版本：${name}`);
+  },
+
   reset: () =>
     set({
       inputMode: 'paste',
@@ -520,6 +585,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
       totalCost: 0,
       previewContent: '',
       previewMode: 'rendered',
+      savedVersions: [],
       editingArticle: null,
       abortController: null,
     }),

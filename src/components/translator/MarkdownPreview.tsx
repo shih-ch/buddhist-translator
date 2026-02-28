@@ -1,13 +1,137 @@
+import { useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { parseMarkdown } from '@/services/markdownUtils';
+import { useGlossaryStore } from '@/stores/glossaryStore';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Highlighter } from 'lucide-react';
+import type { GlossaryTerm } from '@/types/glossary';
+
+const CATEGORY_LABELS: Record<string, string> = {
+  concept: '概念',
+  person: '人名',
+  place: '地名',
+  practice: '修法',
+  text: '經典',
+  deity: '本尊/護法',
+  mantra: '咒語',
+};
 
 interface MarkdownPreviewProps {
   content: string;
 }
 
+function escapeRegExp(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Highlight glossary terms in a text string, returning React nodes */
+function highlightTerms(
+  text: string,
+  regex: RegExp,
+  termMap: Map<string, GlossaryTerm>,
+): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  // Reset regex state
+  regex.lastIndex = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    const matchedText = match[0];
+    const term = termMap.get(matchedText.toLowerCase());
+    if (!term) continue;
+
+    // Add preceding text
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+
+    // Add highlighted term
+    nodes.push(
+      <Tooltip key={`${match.index}-${matchedText}`}>
+        <TooltipTrigger asChild>
+          <mark className="bg-yellow-100/60 dark:bg-yellow-900/30 rounded px-0.5 cursor-help">
+            {matchedText}
+          </mark>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs space-y-1 p-2">
+          <div className="font-medium">{term.original} → {term.translation}</div>
+          {term.sanskrit && <div className="text-[10px] opacity-80">梵: {term.sanskrit}</div>}
+          <Badge variant="outline" className="text-[10px] h-4">{CATEGORY_LABELS[term.category] ?? term.category}</Badge>
+          {term.notes && <div className="text-[10px] opacity-70 mt-1">{term.notes}</div>}
+        </TooltipContent>
+      </Tooltip>,
+    );
+
+    lastIndex = match.index + matchedText.length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+
+  return nodes.length > 0 ? nodes : [text];
+}
+
+/** Recursively process React children, highlighting text nodes */
+function processChildren(
+  children: ReactNode,
+  regex: RegExp,
+  termMap: Map<string, GlossaryTerm>,
+): ReactNode {
+  if (typeof children === 'string') {
+    const result = highlightTerms(children, regex, termMap);
+    return result.length === 1 && typeof result[0] === 'string' ? result[0] : <>{result}</>;
+  }
+  if (Array.isArray(children)) {
+    return children.map((child, i) => {
+      const processed = processChildren(child, regex, termMap);
+      return typeof processed === 'string' ? processed : <span key={i}>{processed}</span>;
+    });
+  }
+  return children;
+}
+
 export function MarkdownPreview({ content }: MarkdownPreviewProps) {
+  const [highlightEnabled, setHighlightEnabled] = useState(true);
+  const terms = useGlossaryStore((s) => s.glossary?.terms ?? []);
+
+  // Build regex and term lookup map
+  const { regex, termMap } = useMemo(() => {
+    if (terms.length === 0) return { regex: null, termMap: new Map<string, GlossaryTerm>() };
+
+    const map = new Map<string, GlossaryTerm>();
+    // Collect all matchable strings, sorted by length desc (longer matches first)
+    const patterns: string[] = [];
+    for (const t of terms) {
+      if (t.original) {
+        patterns.push(t.original);
+        map.set(t.original.toLowerCase(), t);
+      }
+      if (t.translation) {
+        patterns.push(t.translation);
+        map.set(t.translation.toLowerCase(), t);
+      }
+    }
+    // Sort by length descending so longer terms match first
+    patterns.sort((a, b) => b.length - a.length);
+    if (patterns.length === 0) return { regex: null, termMap: map };
+
+    const re = new RegExp(patterns.map(escapeRegExp).join('|'), 'gi');
+    return { regex: re, termMap: map };
+  }, [terms]);
+
   if (!content.trim()) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -23,7 +147,6 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
     const parsed = parseMarkdown(content);
     if (parsed.frontmatter.title) {
       frontmatter = parsed.frontmatter as unknown as Record<string, unknown>;
-      // Reconstruct body with original text section
       body = parsed.content;
       if (parsed.originalText) {
         body +=
@@ -36,8 +159,26 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
     // Not parseable, just render as-is
   }
 
+  const shouldHighlight = highlightEnabled && regex && termMap.size > 0;
+
   return (
     <div className="prose prose-sm dark:prose-invert max-w-none p-4">
+      {/* Highlight toggle */}
+      {terms.length > 0 && (
+        <div className="flex justify-end mb-2 not-prose">
+          <Button
+            variant={highlightEnabled ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-6 text-xs px-2"
+            onClick={() => setHighlightEnabled(!highlightEnabled)}
+            title="術語標註"
+          >
+            <Highlighter className="size-3 mr-1" />
+            術語標註
+          </Button>
+        </div>
+      )}
+
       {/* Frontmatter as metadata table */}
       {frontmatter && (
         <div className="mb-4 rounded border bg-muted/30 p-3 text-xs">
@@ -60,23 +201,31 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
         </div>
       )}
 
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeRaw]}
-        components={{
-          // Render <details> as collapsible with styling
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          details: (props: any) => (
-            <details className="my-4 rounded border bg-muted/20 p-4" {...props} />
-          ),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          summary: (props: any) => (
-            <summary className="cursor-pointer font-medium text-base mb-2" {...props} />
-          ),
-        }}
-      >
-        {body}
-      </ReactMarkdown>
+      <TooltipProvider>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeRaw]}
+          components={{
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            p: shouldHighlight
+              ? ({ children, ...props }: any) => (
+                  <p {...props}>{processChildren(children, regex!, termMap)}</p>
+                )
+              : undefined,
+            // Render <details> as collapsible with styling
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            details: (props: any) => (
+              <details className="my-4 rounded border bg-muted/20 p-4" {...props} />
+            ),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            summary: (props: any) => (
+              <summary className="cursor-pointer font-medium text-base mb-2" {...props} />
+            ),
+          }}
+        >
+          {body}
+        </ReactMarkdown>
+      </TooltipProvider>
     </div>
   );
 }

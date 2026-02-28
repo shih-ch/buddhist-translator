@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Copy, Github, FileText, FileCode, Check, Loader2, FileType, FileSpreadsheet, Columns2, BookCheck, GitCompare } from 'lucide-react';
+import { Download, Copy, Github, FileText, FileCode, Check, Loader2, FileType, FileSpreadsheet, Columns2, BookCheck, GitCompare, Bookmark, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -12,6 +12,7 @@ import { MarkdownEditor } from './MarkdownEditor';
 import { ParallelView } from './ParallelView';
 import { ConsistencyReport } from './ConsistencyReport';
 import { VersionCompare } from './VersionCompare';
+import { VersionManager } from './VersionManager';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -31,9 +32,12 @@ export function PreviewPanel() {
   const [showParallel, setShowParallel] = useState(false);
   const [showConsistency, setShowConsistency] = useState(false);
   const [showVersionCompare, setShowVersionCompare] = useState(false);
+  const [showVersionManager, setShowVersionManager] = useState(false);
   const githubToken = useSettingsStore((s) => s.githubToken);
   const editingArticle = useTranslatorStore((s) => s.editingArticle);
   const originalText = useTranslatorStore((s) => s.originalText);
+  const saveVersion = useTranslatorStore((s) => s.saveVersion);
+  const savedVersions = useTranslatorStore((s) => s.savedVersions);
 
   const handleDownloadMd = () => {
     if (!previewContent) return;
@@ -184,6 +188,29 @@ ${htmlContent}
                 <GitCompare className="size-3" />
               </Button>
             )}
+            {previewContent && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs px-2"
+                onClick={() => saveVersion()}
+                title="儲存版本"
+              >
+                <Bookmark className="size-3" />
+              </Button>
+            )}
+            <Button
+              variant={showVersionManager ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-6 text-xs px-2"
+              onClick={() => setShowVersionManager(true)}
+              title="版本管理"
+            >
+              <History className="size-3" />
+              {savedVersions.length > 0 && (
+                <span className="ml-0.5 text-[10px]">{savedVersions.length}</span>
+              )}
+            </Button>
           </div>
         </div>
 
@@ -284,6 +311,10 @@ ${htmlContent}
       <VersionCompare
         open={showVersionCompare}
         onClose={() => setShowVersionCompare(false)}
+      />
+      <VersionManager
+        open={showVersionManager}
+        onClose={() => setShowVersionManager(false)}
       />
     </div>
   );
