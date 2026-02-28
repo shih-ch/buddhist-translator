@@ -179,3 +179,19 @@ export function buildUrlCleanupMessages(
     { role: 'user', content: rawHtml },
   ];
 }
+
+/**
+ * Build messages for the "glossary_fill" AI function.
+ * The prompt template contains {terms} placeholder.
+ */
+export function buildGlossaryFillMessages(
+  systemPrompt: string,
+  terms: string[]
+): AIMessage[] {
+  const termsList = terms.map((t, i) => `${i + 1}. ${t}`).join('\n');
+  const filled = systemPrompt.replace('{terms}', termsList);
+  return [
+    { role: 'system', content: filled },
+    { role: 'user', content: `請翻譯以上 ${terms.length} 個術語。` },
+  ];
+}

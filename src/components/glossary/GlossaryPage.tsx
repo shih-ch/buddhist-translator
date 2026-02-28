@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Download, Upload, BookOpen } from 'lucide-react'
+import { Plus, Download, Upload, BookOpen, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -19,6 +19,7 @@ import type { GlossaryTerm } from '@/types/glossary'
 import { LANGUAGE_LABELS } from '@/types/glossary'
 import { toast } from 'sonner'
 import { Import84000Dialog } from './Import84000Dialog'
+import { BatchFillDialog } from './BatchFillDialog'
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS)
 const ALL_LANGUAGES = Object.keys(LANGUAGE_LABELS)
@@ -96,6 +97,7 @@ export function GlossaryPageContent() {
   const [editingTerm, setEditingTerm] = useState<GlossaryTerm | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [import84000Open, setImport84000Open] = useState(false)
+  const [batchFillOpen, setBatchFillOpen] = useState(false)
 
   useEffect(() => {
     fetchGlossary()
@@ -107,6 +109,7 @@ export function GlossaryPageContent() {
   }, [search])
 
   const allTerms = glossary?.terms ?? []
+  const emptyTranslationCount = useMemo(() => allTerms.filter((t) => !t.translation.trim()).length, [allTerms])
 
   const filtered = useMemo(() => {
     return allTerms.filter((t) => {
@@ -280,6 +283,10 @@ export function GlossaryPageContent() {
             <BookOpen className="mr-2 h-4 w-4" />
             匯入 84000
           </Button>
+          <Button variant="outline" onClick={() => setBatchFillOpen(true)} disabled={emptyTranslationCount === 0}>
+            <Sparkles className="mr-2 h-4 w-4" />
+            AI 補齊 ({emptyTranslationCount})
+          </Button>
           <Button variant="outline" onClick={handleExport} disabled={allTerms.length === 0}>
             <Download className="mr-2 h-4 w-4" />
             匯出 CSV
@@ -305,6 +312,7 @@ export function GlossaryPageContent() {
       />
 
       <Import84000Dialog open={import84000Open} onOpenChange={setImport84000Open} />
+      <BatchFillDialog open={batchFillOpen} onOpenChange={setBatchFillOpen} />
     </div>
   )
 }

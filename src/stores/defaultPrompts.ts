@@ -249,3 +249,15 @@ export const DEFAULT_URL_CLEANUP_PROMPT = `以下是從網頁擷取的原始 HTM
 }
 
 只回傳 JSON，不要添加任何額外解釋。`
+
+export const DEFAULT_GLOSSARY_FILL_PROMPT = `你是佛學翻譯專家。以下是一組佛學術語（英文），請提供繁體中文翻譯。
+
+規則：
+1. 使用佛教常用的繁體中文譯名（例如 Avalokiteśvara → 觀世音菩薩）
+2. 如果有公認的中文譯名，使用公認譯名
+3. 如果是人名/地名，音譯即可
+4. 回傳 JSON 陣列：[{"original": "英文原文", "translation": "中文翻譯"}]
+5. 只回傳 JSON，不加額外說明
+
+術語列表：
+{terms}`

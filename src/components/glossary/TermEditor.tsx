@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -6,6 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Loader2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,6 +21,11 @@ import {
 import type { GlossaryTerm, SourceLanguage } from '@/types/glossary'
 import { LANGUAGE_LABELS } from '@/types/glossary'
 import { CATEGORY_LABELS } from './GlossaryStats'
+import { useAIFunctionsStore } from '@/stores/aiFunctionsStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { trackedCallFunction } from '@/services/ai/trackedCall'
+import { buildGlossaryFillMessages } from '@/services/ai/promptBuilder'
+import { toast } from 'sonner'
 
 interface TermEditorProps {
   open: boolean
@@ -43,6 +49,35 @@ export function TermEditor({ open, onOpenChange, term, onSave }: TermEditorProps
   const [wylie, setWylie] = useState('')
   const [definition, setDefinition] = useState('')
   const [link, setLink] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+
+  const handleAIFill = useCallback(async () => {
+    if (!original.trim()) return
+    setAiLoading(true)
+    try {
+      const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('glossary_fill')
+      const apiKeys = useSettingsStore.getState().apiKeys
+      const messages = buildGlossaryFillMessages(fnConfig.prompt, [original])
+      const response = await trackedCallFunction(fnConfig, apiKeys, messages, undefined, 'glossary_fill')
+
+      let jsonStr = response.content.trim()
+      const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+      if (codeBlockMatch) jsonStr = codeBlockMatch[1].trim()
+
+      const results = JSON.parse(jsonStr) as { original: string; translation: string }[]
+      if (results.length > 0 && results[0].translation) {
+        setTranslation(results[0].translation)
+        const tag = '[AI翻譯]'
+        if (!notes.includes(tag)) {
+          setNotes(notes ? notes + ' ' + tag : tag)
+        }
+      }
+    } catch (err) {
+      toast.error(`AI 翻譯失敗：${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
+      setAiLoading(false)
+    }
+  }, [original, notes])
 
   useEffect(() => {
     if (term) {
@@ -125,12 +160,25 @@ export function TermEditor({ open, onOpenChange, term, onSave }: TermEditorProps
           </div>
           <div className="grid gap-2">
             <Label htmlFor="translation">中文翻譯</Label>
-            <Input
-              id="translation"
-              value={translation}
-              onChange={(e) => setTranslation(e.target.value)}
-              placeholder="菩提心"
-            />
+            <div className="flex gap-2">
+              <Input
+                id="translation"
+                value={translation}
+                onChange={(e) => setTranslation(e.target.value)}
+                placeholder="菩提心"
+                className="flex-1"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                onClick={handleAIFill}
+                disabled={!original.trim() || aiLoading}
+                title="AI 補齊翻譯"
+              >
+                {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="sanskrit">梵文/藏文</Label>

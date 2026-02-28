@@ -101,6 +101,16 @@ class GitHubService {
     }
   }
 
+  /** Get just the SHA of a file without downloading content (works for >1MB files) */
+  async getFileSha(filePath: string): Promise<string> {
+    const dir = filePath.includes('/') ? filePath.substring(0, filePath.lastIndexOf('/')) : ''
+    const name = filePath.includes('/') ? filePath.substring(filePath.lastIndexOf('/') + 1) : filePath
+    const entries = await this.listDirectory(dir)
+    const entry = entries.find((e) => e.name === name)
+    if (!entry) throw new Error(`File not found: ${filePath}`)
+    return entry.sha
+  }
+
   async listDirectory(path: string): Promise<FileEntry[]> {
     const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${encodePath(path)}?ref=${this.branch}`
     const res = await this.apiFetch(url)
@@ -148,8 +158,9 @@ class GitHubService {
     if (res.status === 409) {
       console.warn(`[GitHub] SHA conflict on ${path}, retrying with fresh SHA...`)
       try {
-        const latest = await this.getFile(path)
-        res = await attempt(latest.sha)
+        // Use getFileSha (directory listing) to avoid >1MB Content API limit
+        const latestSha = await this.getFileSha(path)
+        res = await attempt(latestSha)
       } catch {
         // File might have been deleted; retry without SHA
         res = await attempt(undefined)
@@ -233,8 +244,8 @@ class GitHubService {
     const content = JSON.stringify(glossary, null, 2)
     let sha: string | undefined
     try {
-      const existing = await this.getFile('glossary.json')
-      sha = existing.sha
+      // Use getFileSha instead of getFile to avoid >1MB Content API limit
+      sha = await this.getFileSha('glossary.json')
     } catch {
       // File doesn't exist yet
     }

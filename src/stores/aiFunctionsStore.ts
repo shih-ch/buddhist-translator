@@ -6,6 +6,7 @@ import {
   DEFAULT_TERM_EXTRACTION_PROMPT,
   DEFAULT_URL_CLEANUP_PROMPT,
   DEFAULT_DICTIONARY_LOOKUP_PROMPT,
+  DEFAULT_GLOSSARY_FILL_PROMPT,
 } from './defaultPrompts'
 import { usePromptHistoryStore } from './promptHistoryStore'
 
@@ -54,6 +55,15 @@ const DEFAULT_FUNCTIONS: AIFunctionConfig[] = [
     model: 'gpt-4.1-mini',
     prompt: DEFAULT_DICTIONARY_LOOKUP_PROMPT,
     defaultPrompt: DEFAULT_DICTIONARY_LOOKUP_PROMPT,
+  },
+  {
+    id: 'glossary_fill',
+    name: '術語翻譯補齊',
+    description: '用 AI 為缺少中文翻譯的術語產生翻譯',
+    provider: 'google',
+    model: 'gemini-2.0-flash',
+    prompt: DEFAULT_GLOSSARY_FILL_PROMPT,
+    defaultPrompt: DEFAULT_GLOSSARY_FILL_PROMPT,
   },
 ]
 
