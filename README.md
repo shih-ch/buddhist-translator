@@ -35,12 +35,14 @@
 | **AI 辭典查詢** | 佛學術語詞源、定義、中文翻譯查詢 |
 | **術語表管理** | 建立、編輯、匯出佛學術語表，支援分類與語言篩選 |
 | **翻譯記憶 (TM)** | 自動記錄並建議相似翻譯，減少重複工作 |
+| **術語自動標註** | 翻譯預覽中自動標示術語表詞彙，hover 顯示定義 |
 | **術語一致性檢查** | 自動檢查翻譯中術語是否一致 |
+| **CBETA 大正藏** | 輸入經號（如 T0001）直接從大正藏擷取經文翻譯 |
 | **GitHub 整合** | 文章同步、術語表同步、翻譯記錄 |
 | **批次翻譯** | 多篇文章排隊自動翻譯 |
 | **多格式匯出** | Markdown、HTML、PDF、DOCX |
 | **雙欄對照** | 原文與譯文同步捲動對照閱讀 |
-| **版本比較** | 比較不同 AI 模型的翻譯差異 |
+| **多版本管理** | 儲存、載入、比較多個翻譯版本 |
 | **OCR 輸入** | 圖片文字辨識（支援中俄英藏梵） |
 | **費用追蹤** | 即時追蹤 API 呼叫費用，圖表分析 |
 | **深色模式** | 支援明暗主題切換 |
@@ -159,8 +161,8 @@ npx gh-pages -d dist
 │  原文輸入區  │  翻譯參數 + 對話  │  預覽 + 匯出區  │
 │             │                  │                 │
 │  貼上/URL/  │  模型選擇        │  Markdown 預覽   │
-│  匯入/OCR   │  參數預設        │  原始碼編輯      │
-│             │  AI 對話         │  雙欄對照       │
+│  大正藏/    │  參數預設        │  術語標註       │
+│  匯入/OCR   │  AI 對話         │  版本管理       │
 │             │  辭典面板        │  匯出按鈕       │
 └─────────────┴──────────────────┴─────────────────┘
 ```
@@ -169,6 +171,7 @@ npx gh-pages -d dist
 
 - **貼上**：直接貼上原文，自動偵測語言，自動清除常見分隔線 (`+++`, `---`, `===`)
 - **URL**：輸入網址自動擷取文章內容，AI 清理格式
+- **大正藏 (CBETA)**：輸入經號（如 T0001、X0001）查詢經文資訊、選擇卷數、擷取經文，自動填入標題、作者等 metadata
 - **匯入**：從 GitHub 載入已儲存的文章繼續編輯
 - **OCR**：上傳圖片，使用 tesseract.js 辨識文字（支援中、英、俄、藏、梵文）
 
@@ -216,15 +219,24 @@ npx gh-pages -d dist
 - 左側原文、右側譯文，同步捲動
 - 以段落對齊方式呈現
 
+#### 術語自動標註
+
+- 翻譯預覽中自動將術語表已有詞彙以黃色底色標註
+- Hover 時顯示 Tooltip：原文 → 翻譯、梵文、分類、備註
+- 可在預覽面板右上角切換開啟/關閉
+
 #### 術語一致性檢查
 
 - 檢查翻譯中是否所有術語都使用了術語表中的統一譯法
 - 標示不一致之處，方便修正
 
-#### 版本比較
+#### 多版本翻譯管理
 
-- 比較不同 AI 模型或不同次翻譯的差異
-- 以 diff 方式標示新增、刪除、修改的部分
+- 點擊「Bookmark」按鈕快速儲存當前翻譯為命名版本
+- 點擊「History」按鈕開啟版本管理面板
+- 版本列表顯示：名稱、模型、時間、字數
+- 可載入特定版本、與其他版本 diff 比較、刪除版本
+- 版本持久化儲存在 localStorage
 
 #### 批次翻譯
 
@@ -289,7 +301,11 @@ npx gh-pages -d dist
   - 按語言篩選
   - 關鍵字搜尋
 
-- **匯出**：CSV 格式匯出（含所有欄位）
+- **匯入/匯出 CSV**：
+  - 匯出所有術語為 CSV 檔案（含所有欄位）
+  - 匯入 CSV 檔案批次加入術語，支援 BOM、引號欄位
+  - 自動跳過重複術語（按原文比對）
+  - 支援彈性欄名（英文或中文欄名皆可）
 
 - **GitHub 同步**：術語表可同步到 GitHub 倉庫
 
@@ -454,16 +470,17 @@ src/
 │
 ├── components/
 │   ├── layout/                # 佈局 (Header, Sidebar, Layout)
-│   ├── translator/            # 翻譯元件 (19+)
-│   │   ├── SourceInput.tsx    # 輸入區（貼上/URL/匯入/OCR）
+│   ├── translator/            # 翻譯元件 (22+)
+│   │   ├── SourceInput.tsx    # 輸入區（貼上/URL/大正藏/匯入/OCR）
 │   │   ├── PasteInput.tsx     # 貼上輸入（含自動清理）
 │   │   ├── UrlInput.tsx       # URL 擷取
+│   │   ├── CBETAInput.tsx     # CBETA 大正藏經文擷取
 │   │   ├── ImportInput.tsx    # GitHub 匯入
 │   │   ├── OCRInput.tsx       # 圖片 OCR
 │   │   ├── ChatPanel.tsx      # AI 對話面板
 │   │   ├── DictionaryPanel.tsx # 辭典面板
 │   │   ├── PreviewPanel.tsx   # 預覽與匯出
-│   │   ├── MarkdownPreview.tsx # Markdown 渲染
+│   │   ├── MarkdownPreview.tsx # Markdown 渲染（含術語標註）
 │   │   ├── MarkdownEditor.tsx # 原始碼編輯
 │   │   ├── ParallelView.tsx   # 雙欄對照
 │   │   ├── BatchPanel.tsx     # 批次翻譯
@@ -471,6 +488,7 @@ src/
 │   │   ├── TermExtractor.tsx  # 術語提取
 │   │   ├── ConsistencyReport.tsx # 術語一致性
 │   │   ├── VersionCompare.tsx # 版本比較
+│   │   ├── VersionManager.tsx # 多版本管理
 │   │   ├── TranslationParams.tsx # 翻譯參數面板
 │   │   ├── ParamPresets.tsx   # 預設選擇器
 │   │   ├── MetadataForm.tsx   # 文章資訊表單
@@ -505,6 +523,7 @@ src/
 │   │   ├── router.ts          # AI 路由（統一介面）
 │   │   ├── promptBuilder.ts   # 提示詞組裝
 │   │   └── trackedCall.ts     # 費用追蹤包裝
+│   ├── cbetaApi.ts            # CBETA 大正藏 API
 │   ├── csaltDictionary.ts     # C-SALT 梵文辭典 API
 │   ├── dictionaryLookup.ts    # 辭典查詢服務
 │   ├── github.ts              # GitHub REST API
@@ -540,6 +559,7 @@ src/
 | **Google Gemini** | Gemini 翻譯 | 是 |
 | **Perplexity** | Sonar 翻譯 | 是 |
 | **C-SALT** (api.c-salt.uni-koeln.de) | 梵文辭典 (MW + BHS) | 否（免費） |
+| **CBETA** (cbdata.dila.edu.tw) | 大正藏經文擷取 | 否（免費） |
 | **GitHub REST API** | 文章/術語同步 | 是 (PAT) |
 
 ### 資料儲存
@@ -556,6 +576,7 @@ src/
 | `bt-cost-tracking` | 費用記錄 |
 | `bt-correction-shortcuts` | 校正快捷鍵 |
 | `bt-prompt-history` | 提示詞歷史 |
+| `bt-saved-versions` | 翻譯版本存檔 |
 
 ---
 
