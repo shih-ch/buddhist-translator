@@ -112,14 +112,14 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
 
   // Build regex and term lookup map
   // Map uses lowercase key → term (auto-deduplicates)
-  // Supports reverse lookup: original, translation, sanskrit, tibetan, wylie
+  // Supports reverse lookup: original, sanskrit, tibetan, wylie (excludes Chinese translation)
   const { regex, termMap } = useMemo(() => {
     if (terms.length === 0) return { regex: null, termMap: new Map<string, GlossaryTerm>() };
 
     const map = new Map<string, GlossaryTerm>();
     for (const t of terms) {
       if (t.category === 'person' || t.category === 'place') continue;
-      for (const val of [t.original, t.translation, t.sanskrit, t.tibetan, t.wylie]) {
+      for (const val of [t.original, t.sanskrit, t.tibetan, t.wylie]) {
         if (val && val.length > 1) {
           map.set(val.toLowerCase(), t);
         }
@@ -134,17 +134,13 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
       const re = new RegExp(patterns.map(escapeRegExp).join('|'), 'gi');
       return { regex: re, termMap: map };
     } catch {
-      // Regex too large — fall back to original + translation only
+      // Regex too large — fall back to original only
       const fallbackMap = new Map<string, GlossaryTerm>();
       const fallbackPatterns: string[] = [];
       for (const t of terms) {
         if (t.original && t.original.length > 1) {
           fallbackMap.set(t.original.toLowerCase(), t);
           fallbackPatterns.push(escapeRegExp(t.original.toLowerCase()));
-        }
-        if (t.translation && t.translation.length > 1) {
-          fallbackMap.set(t.translation.toLowerCase(), t);
-          fallbackPatterns.push(escapeRegExp(t.translation.toLowerCase()));
         }
       }
       const unique = [...new Set(fallbackPatterns)].sort((a, b) => b.length - a.length);
