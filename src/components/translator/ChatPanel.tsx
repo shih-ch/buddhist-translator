@@ -65,8 +65,10 @@ export function ChatPanel() {
   const hasSource = inputMode === 'import' ? importedText.trim() : originalText.trim();
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      <ModelSelector />
+    <div className="flex h-full flex-col min-h-0">
+      <div className="shrink-0">
+        <ModelSelector />
+      </div>
 
       {/* Messages area */}
       <ScrollArea className="min-h-0 flex-1" ref={scrollRef}>
@@ -93,7 +95,7 @@ export function ChatPanel() {
       </ScrollArea>
 
       {/* Input area */}
-      <div className="border-t p-3">
+      <div className="border-t p-3 shrink-0">
         {messages.length === 0 && hasSource ? (
           <Button onClick={handleTranslate} className="w-full" disabled={isLoading}>
             <Languages className="mr-2 h-4 w-4" />

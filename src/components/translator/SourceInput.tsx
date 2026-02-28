@@ -19,13 +19,13 @@ export function SourceInput() {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col min-h-0">
       <Tabs
         value={activeTab}
         onValueChange={handleTabChange}
-        className="flex flex-1 flex-col overflow-hidden"
+        className="flex flex-1 flex-col min-h-0"
       >
-        <div className="border-b px-3 pt-2">
+        <div className="border-b px-3 pt-2 shrink-0">
           <TabsList variant="line" className="w-full">
             <TabsTrigger value="paste" className="flex-1 text-xs">
               貼上文章
@@ -42,7 +42,7 @@ export function SourceInput() {
           </TabsList>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-auto">
           <TabsContent value="paste" className="mt-0 h-full">
             <PasteInput />
           </TabsContent>
@@ -63,7 +63,7 @@ export function SourceInput() {
           </TabsContent>
         </div>
 
-        <div className="border-t">
+        <div className="border-t shrink-0">
           <MetadataForm />
         </div>
       </Tabs>

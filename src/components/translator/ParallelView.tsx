@@ -1,5 +1,4 @@
 import { useRef, useCallback } from 'react'
-import { ScrollArea } from '@/components/ui/scroll-area'
 
 interface ParallelViewProps {
   originalText: string
@@ -50,50 +49,46 @@ export function ParallelView({ originalText, translatedContent }: ParallelViewPr
 
   return (
     <div className="grid grid-cols-2 h-full divide-x">
-      <div className="flex flex-col overflow-hidden">
-        <div className="px-3 py-1 border-b text-xs font-medium text-muted-foreground bg-muted/30">
+      <div className="flex flex-col min-h-0">
+        <div className="px-3 py-1 border-b text-xs font-medium text-muted-foreground bg-muted/30 shrink-0">
           原文
         </div>
-        <ScrollArea className="flex-1">
-          <div
-            ref={leftRef}
-            className="h-full overflow-auto p-3 space-y-3"
-            onScroll={() => handleScroll('left')}
-          >
-            {origParas.map((p, i) => (
-              <div key={i} className="text-sm leading-relaxed whitespace-pre-wrap">
-                {p}
-              </div>
+        <div
+          ref={leftRef}
+          className="flex-1 overflow-y-auto p-3 space-y-3"
+          onScroll={() => handleScroll('left')}
+        >
+          {origParas.map((p, i) => (
+            <div key={i} className="text-sm leading-relaxed whitespace-pre-wrap">
+              {p}
+            </div>
+          ))}
+          {origParas.length < maxLen &&
+            Array.from({ length: maxLen - origParas.length }).map((_, i) => (
+              <div key={`pad-${i}`} className="text-sm text-muted-foreground/30">—</div>
             ))}
-            {origParas.length < maxLen &&
-              Array.from({ length: maxLen - origParas.length }).map((_, i) => (
-                <div key={`pad-${i}`} className="text-sm text-muted-foreground/30">—</div>
-              ))}
-          </div>
-        </ScrollArea>
+        </div>
       </div>
 
-      <div className="flex flex-col overflow-hidden">
-        <div className="px-3 py-1 border-b text-xs font-medium text-muted-foreground bg-muted/30">
+      <div className="flex flex-col min-h-0">
+        <div className="px-3 py-1 border-b text-xs font-medium text-muted-foreground bg-muted/30 shrink-0">
           譯文
         </div>
-        <ScrollArea className="flex-1">
-          <div
-            ref={rightRef}
-            className="h-full overflow-auto p-3 space-y-3"
-            onScroll={() => handleScroll('right')}
-          >
-            {transParas.map((p, i) => (
-              <div key={i} className="text-sm leading-relaxed whitespace-pre-wrap">
-                {p}
-              </div>
+        <div
+          ref={rightRef}
+          className="flex-1 overflow-y-auto p-3 space-y-3"
+          onScroll={() => handleScroll('right')}
+        >
+          {transParas.map((p, i) => (
+            <div key={i} className="text-sm leading-relaxed whitespace-pre-wrap">
+              {p}
+            </div>
+          ))}
+          {transParas.length < maxLen &&
+            Array.from({ length: maxLen - transParas.length }).map((_, i) => (
+              <div key={`pad-${i}`} className="text-sm text-muted-foreground/30">—</div>
             ))}
-            {transParas.length < maxLen &&
-              Array.from({ length: maxLen - transParas.length }).map((_, i) => (
-                <div key={`pad-${i}`} className="text-sm text-muted-foreground/30">—</div>
-              ))}
-          </div>
-        </ScrollArea>
+        </div>
       </div>
     </div>
   )

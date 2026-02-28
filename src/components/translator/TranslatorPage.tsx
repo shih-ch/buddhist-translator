@@ -46,48 +46,58 @@ export function TranslatorPage() {
   }, [searchParams, githubToken, loadArticleForEdit, setInputMode]);
 
   return (
-    <div className="grid h-full grid-cols-[1fr_1.6fr_1.4fr] gap-0">
+    <div className="grid h-full grid-cols-[1fr_1.6fr_1.4fr] gap-0 overflow-hidden">
       {/* Left: Source Input */}
-      <div className="flex flex-col overflow-hidden border-r">
-        {(editingArticle || hasContent) && (
-          <div className="flex items-center justify-between border-b px-3 py-1.5">
-            <span className="text-xs text-muted-foreground">
-              {editingArticle ? `編輯：${editingArticle.frontmatter.title}` : ''}
-            </span>
-            <div className="flex gap-1">
-              <Button variant="outline" size="xs" onClick={() => setShowDict(!showDict)}>
-                <BookOpen className="mr-1 h-3 w-3" />辭典
-              </Button>
-              <Button variant="outline" size="xs" onClick={() => setBatchOpen(true)}>
-                <Layers className="mr-1 h-3 w-3" />批次
-              </Button>
-              <Button variant="outline" size="xs" onClick={handleNewTranslation}>
-                <Plus className="mr-1 h-3 w-3" />新增翻譯
-              </Button>
+      <div className="flex flex-col min-h-0 border-r">
+        <div className="shrink-0">
+          {(editingArticle || hasContent) && (
+            <div className="flex items-center justify-between border-b px-3 py-1.5">
+              <span className="text-xs text-muted-foreground">
+                {editingArticle ? `編輯：${editingArticle.frontmatter.title}` : ''}
+              </span>
+              <div className="flex gap-1">
+                <Button variant="outline" size="xs" onClick={() => setShowDict(!showDict)}>
+                  <BookOpen className="mr-1 h-3 w-3" />辭典
+                </Button>
+                <Button variant="outline" size="xs" onClick={() => setBatchOpen(true)}>
+                  <Layers className="mr-1 h-3 w-3" />批次
+                </Button>
+                <Button variant="outline" size="xs" onClick={handleNewTranslation}>
+                  <Plus className="mr-1 h-3 w-3" />新增翻譯
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
-        <SourceInput />
+          )}
+        </div>
+        <div className="flex-1 min-h-0 overflow-auto">
+          <SourceInput />
+        </div>
         {/* TM Suggestions when original text is entered */}
         {originalText.length > 50 && (
-          <TMSuggestions sourceText={originalText} />
+          <div className="shrink-0">
+            <TMSuggestions sourceText={originalText} />
+          </div>
         )}
       </div>
 
       {/* Center: Params + Chat */}
-      <div className="flex flex-col overflow-hidden border-r">
-        <TranslationParams />
-        <ChatPanel />
+      <div className="flex flex-col min-h-0 border-r">
+        <div className="shrink-0 max-h-[40%] overflow-auto">
+          <TranslationParams />
+        </div>
+        <div className="flex-1 min-h-0">
+          <ChatPanel />
+        </div>
       </div>
 
       {/* Right: Preview & Export + optional Dictionary */}
-      <div className="flex flex-col overflow-hidden">
+      <div className="flex flex-col min-h-0">
         {showDict ? (
-          <div className="flex flex-col h-full">
-            <div className="flex-1 overflow-hidden border-b">
+          <div className="flex flex-col h-full min-h-0">
+            <div className="flex-1 min-h-0 border-b">
               <PreviewPanel />
             </div>
-            <div className="h-[300px] overflow-hidden">
+            <div className="h-[280px] shrink-0 overflow-auto">
               <DictionaryPanel />
             </div>
           </div>
