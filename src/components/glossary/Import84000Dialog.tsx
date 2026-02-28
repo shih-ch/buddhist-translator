@@ -27,7 +27,7 @@ interface Import84000DialogProps {
 }
 
 export function Import84000Dialog({ open, onOpenChange }: Import84000DialogProps) {
-  const { glossary, addTermsBatch } = useGlossaryStore()
+  const { glossary, addTermsBatch, updateTermsBatch } = useGlossaryStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [entries, setEntries] = useState<Raw84000Entry[]>([])
@@ -78,16 +78,21 @@ export function Import84000Dialog({ open, onOpenChange }: Import84000DialogProps
   const handleImport = async () => {
     setImporting(true)
     try {
-      const existingOriginals = new Set(
-        (glossary?.terms ?? []).map((t) => t.original.toLowerCase()),
+      const existingTermMap = new Map(
+        (glossary?.terms ?? []).map((t) => [t.original.toLowerCase(), t]),
       )
-      const { terms, skipped } = toGlossaryTerms(filtered, existingOriginals)
+      const { terms, merged, skipped } = toGlossaryTerms(filtered, existingTermMap)
       if (terms.length > 0) {
         await addTermsBatch(terms)
       }
-      toast.success(
-        `已匯入 ${terms.length} 筆術語${skipped > 0 ? `，跳過 ${skipped} 筆重複` : ''}`,
-      )
+      if (merged.length > 0) {
+        await updateTermsBatch(merged)
+      }
+      const parts: string[] = []
+      if (terms.length > 0) parts.push(`新增 ${terms.length} 筆`)
+      if (merged.length > 0) parts.push(`合併 ${merged.length} 筆`)
+      if (skipped > 0) parts.push(`跳過 ${skipped} 筆重複`)
+      toast.success(parts.join('，') || '無變更')
       onOpenChange(false)
       setEntries([])
       setFileName('')

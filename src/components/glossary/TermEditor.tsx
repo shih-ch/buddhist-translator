@@ -39,6 +39,10 @@ export function TermEditor({ open, onOpenChange, term, onSave }: TermEditorProps
   const [category, setCategory] = useState<GlossaryTerm['category']>('concept')
   const [notes, setNotes] = useState('')
   const [sourceArticle, setSourceArticle] = useState('')
+  const [tibetan, setTibetan] = useState('')
+  const [wylie, setWylie] = useState('')
+  const [definition, setDefinition] = useState('')
+  const [link, setLink] = useState('')
 
   useEffect(() => {
     if (term) {
@@ -49,6 +53,10 @@ export function TermEditor({ open, onOpenChange, term, onSave }: TermEditorProps
       setCategory(term.category)
       setNotes(term.notes)
       setSourceArticle(term.source_article || '')
+      setTibetan(term.tibetan || '')
+      setWylie(term.wylie || '')
+      setDefinition(term.definition || '')
+      setLink(term.link || '')
     } else {
       setOriginal('')
       setTranslation('')
@@ -57,6 +65,10 @@ export function TermEditor({ open, onOpenChange, term, onSave }: TermEditorProps
       setCategory('concept')
       setNotes('')
       setSourceArticle('')
+      setTibetan('')
+      setWylie('')
+      setDefinition('')
+      setLink('')
     }
   }, [term, open])
 
@@ -71,6 +83,10 @@ export function TermEditor({ open, onOpenChange, term, onSave }: TermEditorProps
       notes,
       added_at: term?.added_at ?? new Date().toISOString(),
       source_article: sourceArticle,
+      tibetan,
+      wylie,
+      definition,
+      link,
     }
     onSave(saved)
     onOpenChange(false)
@@ -78,7 +94,7 @@ export function TermEditor({ open, onOpenChange, term, onSave }: TermEditorProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{term ? '編輯術語' : '新增術語'}</DialogTitle>
         </DialogHeader>
@@ -139,6 +155,42 @@ export function TermEditor({ open, onOpenChange, term, onSave }: TermEditorProps
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="tibetan">藏文</Label>
+            <Input
+              id="tibetan"
+              value={tibetan}
+              onChange={(e) => setTibetan(e.target.value)}
+              placeholder="ཨ་བ་ལ།"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="wylie">威利轉寫</Label>
+            <Input
+              id="wylie"
+              value={wylie}
+              onChange={(e) => setWylie(e.target.value)}
+              placeholder="a ba la"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="definition">定義</Label>
+            <Textarea
+              id="definition"
+              value={definition}
+              onChange={(e) => setDefinition(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="link">連結</Label>
+            <Input
+              id="link"
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              placeholder="https://read.84000-translate.org/..."
+            />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="source_article">來源文章</Label>

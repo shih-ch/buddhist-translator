@@ -244,10 +244,40 @@ class GitHubService {
   async loadGlossary(): Promise<Glossary> {
     try {
       const { content } = await this.getFile('glossary.json')
-      return JSON.parse(content)
+      const parsed = JSON.parse(content)
+      // Sanity check: ensure it has terms array
+      if (!parsed || !Array.isArray(parsed.terms)) {
+        throw new Error('Invalid glossary format')
+      }
+      return parsed
     } catch {
-      return { version: 1, updated_at: new Date().toISOString(), terms: [] }
+      // Contents API may truncate large files or return 403 — fall back to Blob API
+      try {
+        return await this.loadGlossaryViaBlob()
+      } catch (blobErr) {
+        throw blobErr
+      }
     }
+  }
+
+  private async loadGlossaryViaBlob(): Promise<Glossary> {
+    // Get file SHA from tree
+    const treeUrl = `${this.apiBase}/repos/${this.owner}/${this.repo}/git/trees/${this.branch}`
+    const treeRes = await this.apiFetch(treeUrl)
+    const treeData = await treeRes.json()
+    const entry = (treeData.tree ?? []).find((item: { path: string }) => item.path === 'glossary.json')
+    if (!entry) throw new Error('glossary.json not found in tree')
+
+    // Fetch blob content
+    const blobUrl = `${this.apiBase}/repos/${this.owner}/${this.repo}/git/blobs/${entry.sha}`
+    const blobRes = await this.apiFetch(blobUrl)
+    const blobData = await blobRes.json()
+
+    // Handle UTF-8 properly for base64
+    const decoded = blobData.encoding === 'base64'
+      ? new TextDecoder().decode(Uint8Array.from(atob(blobData.content.replace(/\n/g, '')), c => c.charCodeAt(0)))
+      : blobData.content
+    return JSON.parse(decoded)
   }
 
   // ─── Config Operations ───

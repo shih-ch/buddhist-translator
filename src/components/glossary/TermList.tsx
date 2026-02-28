@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Pencil, Trash2, ExternalLink } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { Pencil, Trash2, ExternalLink, Link as LinkIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -21,6 +22,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import type { GlossaryTerm } from '@/types/glossary'
 import { LANGUAGE_LABELS } from '@/types/glossary'
 import { CATEGORY_LABELS } from './GlossaryStats'
@@ -40,6 +47,7 @@ export function TermList({ terms, onEdit, onDelete, onDeleteBatch }: TermListPro
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [batchDeleteOpen, setBatchDeleteOpen] = useState(false)
+  const parentRef = useRef<HTMLDivElement>(null)
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -56,6 +64,20 @@ export function TermList({ terms, onEdit, onDelete, onDeleteBatch }: TermListPro
     const cmp = av.localeCompare(bv)
     return sortAsc ? cmp : -cmp
   })
+
+  const virtualizer = useVirtualizer({
+    count: sorted.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 40,
+    overscan: 10,
+  })
+
+  const virtualItems = virtualizer.getVirtualItems()
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0
+  const paddingBottom =
+    virtualItems.length > 0
+      ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end
+      : 0
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -128,92 +150,137 @@ export function TermList({ terms, onEdit, onDelete, onDeleteBatch }: TermListPro
         </div>
       )}
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-10">
-              <Checkbox
-                checked={isAllSelected}
-                {...(isSomeSelected ? { 'data-state': 'indeterminate' } : {})}
-                onCheckedChange={toggleAll}
-              />
-            </TableHead>
-            <SortableHeader label="原文" sortKeyValue="original" />
-            <SortableHeader label="語言" sortKeyValue="language" />
-            <SortableHeader label="中文翻譯" sortKeyValue="translation" />
-            <TableHead>梵文</TableHead>
-            <SortableHeader label="分類" sortKeyValue="category" />
-            <TableHead>來源文章</TableHead>
-            <SortableHeader label="日期" sortKeyValue="added_at" />
-            <TableHead className="w-20" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sorted.map((t) => (
-            <TableRow key={t.id} className={selected.has(t.id) ? 'bg-muted/30' : undefined}>
-              <TableCell>
+      <TooltipProvider>
+      <div ref={parentRef} className="overflow-auto" style={{ maxHeight: '70vh' }}>
+        <Table>
+          <TableHeader className="sticky top-0 z-10 bg-background">
+            <TableRow>
+              <TableHead className="w-10">
                 <Checkbox
-                  checked={selected.has(t.id)}
-                  onCheckedChange={() => toggleSelect(t.id)}
+                  checked={isAllSelected}
+                  {...(isSomeSelected ? { 'data-state': 'indeterminate' } : {})}
+                  onCheckedChange={toggleAll}
                 />
-              </TableCell>
-              <TableCell className="font-medium">{t.original}</TableCell>
-              <TableCell>
-                {t.language ? (
-                  <Badge variant="outline" className="text-[10px]">
-                    {LANGUAGE_LABELS[t.language] ?? t.language}
-                  </Badge>
-                ) : (
-                  <span className="text-muted-foreground">-</span>
-                )}
-              </TableCell>
-              <TableCell>{t.translation}</TableCell>
-              <TableCell className="text-muted-foreground">{t.sanskrit || '-'}</TableCell>
-              <TableCell>
-                <Badge variant="outline">
-                  {CATEGORY_LABELS[t.category] ?? t.category}
-                </Badge>
-              </TableCell>
-              <TableCell className="max-w-40 text-xs text-muted-foreground">
-                {t.source_article ? (
-                  <a
-                    href={t.source_article.startsWith('http') ? t.source_article : `#${t.source_article}`}
-                    target={t.source_article.startsWith('http') ? '_blank' : undefined}
-                    rel={t.source_article.startsWith('http') ? 'noopener noreferrer' : undefined}
-                    className="inline-flex items-center gap-1 hover:text-foreground hover:underline truncate max-w-full"
-                    title={t.source_article}
-                  >
-                    <span className="truncate">{t.source_article}</span>
-                    {t.source_article.startsWith('http') && (
-                      <ExternalLink className="h-3 w-3 shrink-0" />
-                    )}
-                  </a>
-                ) : (
-                  '-'
-                )}
-              </TableCell>
-              <TableCell className="text-xs text-muted-foreground">
-                {t.added_at.split('T')[0]}
-              </TableCell>
-              <TableCell>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(t)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-destructive hover:text-destructive"
-                    onClick={() => setDeleteId(t.id)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </TableCell>
+              </TableHead>
+              <SortableHeader label="原文" sortKeyValue="original" />
+              <TableHead>藏文</TableHead>
+              <SortableHeader label="語言" sortKeyValue="language" />
+              <SortableHeader label="中文翻譯" sortKeyValue="translation" />
+              <TableHead>梵文</TableHead>
+              <SortableHeader label="分類" sortKeyValue="category" />
+              <TableHead className="w-8">來源</TableHead>
+              <TableHead className="w-8">🔗</TableHead>
+              <SortableHeader label="日期" sortKeyValue="added_at" />
+              <TableHead className="w-20" />
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {paddingTop > 0 && (
+              <tr><td style={{ height: paddingTop }} /></tr>
+            )}
+            {virtualItems.map((virtualRow) => {
+              const t = sorted[virtualRow.index]
+              return (
+                <TableRow key={t.id} className={selected.has(t.id) ? 'bg-muted/30' : undefined}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selected.has(t.id)}
+                      onCheckedChange={() => toggleSelect(t.id)}
+                    />
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    {t.definition ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help underline decoration-dotted">{t.original}</span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-sm text-xs">
+                          {t.definition.length > 200 ? t.definition.slice(0, 200) + '…' : t.definition}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : t.original}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {t.tibetan ? (
+                      t.wylie ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-help">{t.tibetan}</span>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs">{t.wylie}</TooltipContent>
+                        </Tooltip>
+                      ) : t.tibetan
+                    ) : t.wylie ? (
+                      <span className="text-xs italic">{t.wylie}</span>
+                    ) : '-'}
+                  </TableCell>
+                  <TableCell>
+                    {t.language ? (
+                      <Badge variant="outline" className="text-[10px]">
+                        {LANGUAGE_LABELS[t.language] ?? t.language}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>{t.translation}</TableCell>
+                  <TableCell className="text-muted-foreground">{t.sanskrit || '-'}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">
+                      {CATEGORY_LABELS[t.category] ?? t.category}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {t.source_article ? (
+                      t.source_article.startsWith('http') ? (
+                        <a href={t.source_article} target="_blank" rel="noopener noreferrer" title={t.source_article}>
+                          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground inline" />
+                        </a>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-xs text-muted-foreground cursor-help">📄</span>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs">{t.source_article}</TooltipContent>
+                        </Tooltip>
+                      )
+                    ) : null}
+                  </TableCell>
+                  <TableCell>
+                    {t.link && (
+                      <a href={t.link} target="_blank" rel="noopener noreferrer" title={t.link}>
+                        <LinkIcon className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                      </a>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {t.added_at.split('T')[0]}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(t)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => setDeleteId(t.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+            {paddingBottom > 0 && (
+              <tr><td style={{ height: paddingBottom }} /></tr>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+      </TooltipProvider>
 
       {/* Single delete dialog */}
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>

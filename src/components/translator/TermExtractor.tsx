@@ -128,6 +128,10 @@ export function TermExtractor({ open, onClose, messageId }: TermExtractorProps) 
       notes: t.notes || '',
       added_at: new Date().toISOString(),
       source_article: metadata.title || '',
+      tibetan: '',
+      wylie: '',
+      definition: '',
+      link: '',
     }));
 
     try {

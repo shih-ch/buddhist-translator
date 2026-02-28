@@ -8,7 +8,18 @@ const CACHE_KEY = 'bt-glossary-cache'
 function saveToCache(glossary: Glossary) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(glossary))
-  } catch { /* ignore */ }
+  } catch {
+    // localStorage full — try saving without definition field to reduce size
+    try {
+      const slim = {
+        ...glossary,
+        terms: glossary.terms.map(({ definition, ...rest }) => ({ ...rest, definition: definition ? '...' : '' })),
+      }
+      localStorage.setItem(CACHE_KEY, JSON.stringify(slim))
+    } catch {
+      console.warn('Glossary too large for localStorage cache')
+    }
+  }
 }
 
 function loadFromCache(): Glossary | null {
@@ -30,6 +41,7 @@ interface GlossaryState {
   deleteTerm: (id: string) => Promise<void>
   deleteTermsBatch: (ids: string[]) => Promise<void>
   addTermsBatch: (terms: GlossaryTerm[]) => Promise<void>
+  updateTermsBatch: (updates: { id: string; updates: Partial<GlossaryTerm> }[]) => Promise<void>
   searchTerms: (query: string) => GlossaryTerm[]
   getTermsByCategory: (category: string) => GlossaryTerm[]
   exportCsv: () => string
@@ -53,23 +65,36 @@ export const useGlossaryStore = create<GlossaryState>((set, get) => ({
     if (get().isLoading) return
     set({ isLoading: true })
     try {
-      const glossary = await githubService.loadGlossary()
-      // Merge: use GitHub version if newer, otherwise keep local cache
+      const remote = await githubService.loadGlossary()
       const cached = get().glossary
-      if (cached && cached.terms.length > glossary.terms.length && cached.updated_at > glossary.updated_at) {
-        // Local has more terms and is newer — keep local and push to GitHub
+      const localNewer = cached?.updated_at && remote.updated_at
+        ? cached.updated_at > remote.updated_at
+        : false
+      if (cached && cached.terms.length > 0 && (cached.terms.length > remote.terms.length || localNewer)) {
+        // Local is newer or has more terms — keep local and push to GitHub
         await githubService.saveGlossary(cached).catch(() => {})
         set({ glossary: cached })
+      } else if (remote.terms.length > 0) {
+        set({ glossary: remote })
+        saveToCache(remote)
+      } else if (cached && cached.terms.length > 0) {
+        // Remote is empty but local has data — keep local
+        set({ glossary: cached })
       } else {
-        set({ glossary })
-        saveToCache(glossary)
+        set({ glossary: remote })
+        saveToCache(remote)
       }
     } catch (err) {
       console.error('Failed to fetch glossary:', err)
-      // Fall back to cached version
-      const cached = loadFromCache()
-      if (cached && !get().glossary) {
-        set({ glossary: cached })
+      // Keep in-memory state if available, otherwise fall back to localStorage
+      const inMemory = get().glossary
+      if (inMemory && inMemory.terms.length > 0) {
+        // Already have data in memory — don't overwrite
+      } else {
+        const cached = loadFromCache()
+        if (cached) {
+          set({ glossary: cached })
+        }
       }
     } finally {
       set({ isLoading: false })
@@ -135,6 +160,22 @@ export const useGlossaryStore = create<GlossaryState>((set, get) => ({
     await persistToGithub(updated)
   },
 
+  updateTermsBatch: async (updates) => {
+    const glossary = get().glossary
+    if (!glossary || updates.length === 0) return
+    const updateMap = new Map(updates.map((u) => [u.id, u.updates]))
+    const updated: Glossary = {
+      ...glossary,
+      updated_at: new Date().toISOString(),
+      terms: glossary.terms.map((t) => {
+        const patch = updateMap.get(t.id)
+        return patch ? { ...t, ...patch } : t
+      }),
+    }
+    set({ glossary: updated })
+    await persistToGithub(updated)
+  },
+
   searchTerms: (query) => {
     const glossary = get().glossary
     if (!glossary || !query) return glossary?.terms ?? []
@@ -157,9 +198,9 @@ export const useGlossaryStore = create<GlossaryState>((set, get) => ({
   exportCsv: () => {
     const glossary = get().glossary
     if (!glossary) return ''
-    const header = 'original,translation,sanskrit,language,category,notes,source_article'
+    const header = 'original,translation,sanskrit,language,category,notes,source_article,tibetan,wylie,definition,link'
     const rows = glossary.terms.map((t) =>
-      [t.original, t.translation, t.sanskrit, t.language || '', t.category, t.notes, t.source_article || '']
+      [t.original, t.translation, t.sanskrit, t.language || '', t.category, t.notes, t.source_article || '', t.tibetan || '', t.wylie || '', t.definition || '', t.link || '']
         .map((v) => `"${v.replace(/"/g, '""')}"`)
         .join(',')
     )

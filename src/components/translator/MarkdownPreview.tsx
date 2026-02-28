@@ -67,7 +67,10 @@ function highlightTerms(
         <TooltipContent className="max-w-xs space-y-1 p-2">
           <div className="font-medium">{term.original} → {term.translation}</div>
           {term.sanskrit && <div className="text-[10px] opacity-80">梵: {term.sanskrit}</div>}
-          <Badge variant="outline" className="text-[10px] h-4">{CATEGORY_LABELS[term.category] ?? term.category}</Badge>
+          {term.tibetan && <div className="text-[10px] opacity-80">藏: {term.tibetan}</div>}
+          {term.wylie && <div className="text-[10px] opacity-80">Wylie: {term.wylie}</div>}
+          <Badge variant="outline" className="text-[10px] h-4 text-gray-400 border-gray-400/50">{CATEGORY_LABELS[term.category] ?? term.category}</Badge>
+          {term.definition && <div className="text-[10px] opacity-70 mt-1">{term.definition.length > 100 ? term.definition.slice(0, 100) + '…' : term.definition}</div>}
           {term.notes && <div className="text-[10px] opacity-70 mt-1">{term.notes}</div>}
         </TooltipContent>
       </Tooltip>,
@@ -108,28 +111,46 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
   const terms = useGlossaryStore((s) => s.glossary?.terms ?? []);
 
   // Build regex and term lookup map
+  // Map uses lowercase key → term (auto-deduplicates)
+  // Supports reverse lookup: original, translation, sanskrit, tibetan, wylie
   const { regex, termMap } = useMemo(() => {
     if (terms.length === 0) return { regex: null, termMap: new Map<string, GlossaryTerm>() };
 
     const map = new Map<string, GlossaryTerm>();
-    // Collect all matchable strings, sorted by length desc (longer matches first)
-    const patterns: string[] = [];
     for (const t of terms) {
-      if (t.original) {
-        patterns.push(t.original);
-        map.set(t.original.toLowerCase(), t);
-      }
-      if (t.translation) {
-        patterns.push(t.translation);
-        map.set(t.translation.toLowerCase(), t);
+      if (t.category === 'person' || t.category === 'place') continue;
+      for (const val of [t.original, t.translation, t.sanskrit, t.tibetan, t.wylie]) {
+        if (val && val.length > 1) {
+          map.set(val.toLowerCase(), t);
+        }
       }
     }
-    // Sort by length descending so longer terms match first
-    patterns.sort((a, b) => b.length - a.length);
+
+    // Use deduplicated map keys as patterns, sorted by length desc
+    const patterns = [...map.keys()].sort((a, b) => b.length - a.length);
     if (patterns.length === 0) return { regex: null, termMap: map };
 
-    const re = new RegExp(patterns.map(escapeRegExp).join('|'), 'gi');
-    return { regex: re, termMap: map };
+    try {
+      const re = new RegExp(patterns.map(escapeRegExp).join('|'), 'gi');
+      return { regex: re, termMap: map };
+    } catch {
+      // Regex too large — fall back to original + translation only
+      const fallbackMap = new Map<string, GlossaryTerm>();
+      const fallbackPatterns: string[] = [];
+      for (const t of terms) {
+        if (t.original && t.original.length > 1) {
+          fallbackMap.set(t.original.toLowerCase(), t);
+          fallbackPatterns.push(escapeRegExp(t.original.toLowerCase()));
+        }
+        if (t.translation && t.translation.length > 1) {
+          fallbackMap.set(t.translation.toLowerCase(), t);
+          fallbackPatterns.push(escapeRegExp(t.translation.toLowerCase()));
+        }
+      }
+      const unique = [...new Set(fallbackPatterns)].sort((a, b) => b.length - a.length);
+      const re = new RegExp(unique.join('|'), 'gi');
+      return { regex: re, termMap: fallbackMap };
+    }
   }, [terms]);
 
   if (!content.trim()) {

@@ -89,6 +89,7 @@ export function GlossaryPageContent() {
   } = useGlossaryStore()
 
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('__all__')
   const [languageFilter, setLanguageFilter] = useState('__all__')
   const [editorOpen, setEditorOpen] = useState(false)
@@ -100,23 +101,31 @@ export function GlossaryPageContent() {
     fetchGlossary()
   }, [fetchGlossary])
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
   const allTerms = glossary?.terms ?? []
 
   const filtered = useMemo(() => {
     return allTerms.filter((t) => {
       if (categoryFilter !== '__all__' && t.category !== categoryFilter) return false
       if (languageFilter !== '__all__' && (t.language || '') !== languageFilter) return false
-      if (search) {
-        const q = search.toLowerCase()
+      if (debouncedSearch) {
+        const q = debouncedSearch.toLowerCase()
         return (
           t.original.toLowerCase().includes(q) ||
           t.translation.toLowerCase().includes(q) ||
-          t.sanskrit.toLowerCase().includes(q)
+          t.sanskrit.toLowerCase().includes(q) ||
+          (t.tibetan || '').toLowerCase().includes(q) ||
+          (t.wylie || '').toLowerCase().includes(q) ||
+          (t.definition || '').toLowerCase().includes(q)
         )
       }
       return true
     })
-  }, [allTerms, search, categoryFilter, languageFilter])
+  }, [allTerms, debouncedSearch, categoryFilter, languageFilter])
 
   const handleSave = async (term: GlossaryTerm) => {
     if (editingTerm) {
@@ -193,6 +202,10 @@ export function GlossaryPageContent() {
           notes: row.notes || row['備註'] || '',
           added_at: new Date().toISOString(),
           source_article: row.source_article || row['來源'] || '',
+          tibetan: row.tibetan || row['藏文'] || '',
+          wylie: row.wylie || row['威利'] || '',
+          definition: row.definition || row['定義'] || '',
+          link: row.link || row['連結'] || '',
         })
       }
 

@@ -19,6 +19,10 @@ export interface GlossaryTerm {
   notes: string;
   added_at: string;
   source_article: string;
+  tibetan?: string;
+  wylie?: string;
+  definition?: string;
+  link?: string;
 }
 
 export interface Glossary {
