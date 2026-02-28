@@ -45,7 +45,7 @@ const DEFAULT_PARAMS: TranslationParams = {
   fiveColumnMode: false,
   fiveColumnScope: '全文',
   tibetanTranslitMode: 'A1',
-  mantraTranslit: 'IAST',
+  mantraTranslit: 'wylie',
   onlyVerseMantra: false,
   proofreadMode: 'annotate_only',
   relayLanguage: 'none',

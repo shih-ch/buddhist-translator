@@ -20,7 +20,7 @@ const defaultParams: TranslationParams = {
   fiveColumnMode: false,
   fiveColumnScope: '全文',
   tibetanTranslitMode: 'A1',
-  mantraTranslit: 'IAST',
+  mantraTranslit: 'wylie',
   onlyVerseMantra: false,
   proofreadMode: 'off',
   relayLanguage: 'none',
@@ -98,6 +98,7 @@ function PresetForm({ preset, onSave, onCancel }: {
             <Select value={draft.params.mantraTranslit} onValueChange={(v) => updateParam('mantraTranslit', v as TranslationParams['mantraTranslit'])}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="wylie">Wylie</SelectItem>
                 <SelectItem value="IAST">IAST</SelectItem>
                 <SelectItem value="keep_original">保留原狀</SelectItem>
                 <SelectItem value="if_possible">能則提供</SelectItem>

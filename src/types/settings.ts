@@ -23,7 +23,7 @@ export interface TranslationParams {
   fiveColumnMode: boolean;
   fiveColumnScope: string;
   tibetanTranslitMode: 'A1' | 'A2';
-  mantraTranslit: 'IAST' | 'keep_original' | 'if_possible';
+  mantraTranslit: 'wylie' | 'IAST' | 'keep_original' | 'if_possible';
   onlyVerseMantra: boolean;
   proofreadMode: 'off' | 'annotate_only' | 'allow_correction';
   relayLanguage: 'none' | 'en' | 'ru';

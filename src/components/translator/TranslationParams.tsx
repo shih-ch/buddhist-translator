@@ -133,7 +133,7 @@ export function TranslationParams() {
                 value={p.mantraTranslit}
                 onValueChange={(v) =>
                   setTranslationParams({
-                    mantraTranslit: v as 'IAST' | 'keep_original' | 'if_possible',
+                    mantraTranslit: v as 'wylie' | 'IAST' | 'keep_original' | 'if_possible',
                   })
                 }
               >
@@ -141,6 +141,7 @@ export function TranslationParams() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="wylie">Wylie</SelectItem>
                   <SelectItem value="IAST">IAST</SelectItem>
                   <SelectItem value="keep_original">保留原狀</SelectItem>
                   <SelectItem value="if_possible">能則提供</SelectItem>

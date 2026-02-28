@@ -26,6 +26,7 @@ const TIBETAN_MODE_LABELS: Record<string, string> = {
 };
 
 const MANTRA_TRANSLIT_LABELS: Record<string, string> = {
+  wylie: 'Wylie',
   IAST: 'IAST',
   keep_original: '保留原狀',
   if_possible: '能則提供',
