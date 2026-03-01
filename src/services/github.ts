@@ -154,11 +154,10 @@ class GitHubService {
 
     let res = await attempt(sha)
 
-    // On 409 SHA conflict, re-fetch latest SHA and retry once
-    if (res.status === 409) {
-      console.warn(`[GitHub] SHA conflict on ${path}, retrying with fresh SHA...`)
+    // On 409 SHA conflict or 422 missing SHA, re-fetch latest SHA and retry once
+    if (res.status === 409 || (res.status === 422 && !sha)) {
+      console.warn(`[GitHub] SHA conflict/missing on ${path}, retrying with fresh SHA...`)
       try {
-        // Use getFileSha (directory listing) to avoid >1MB Content API limit
         const latestSha = await this.getFileSha(path)
         res = await attempt(latestSha)
       } catch {
@@ -187,19 +186,20 @@ class GitHubService {
 
   // ─── Translation Operations ───
 
-  async saveTranslation(article: Article): Promise<void> {
+  async saveTranslation(article: Article): Promise<{ path: string; sha: string }> {
     const path = article.path || generateFilePath(article.frontmatter.date, article.frontmatter.title)
     const content = assembleMarkdown(article.frontmatter, article.content, article.originalText)
     const message = article.sha
       ? `Update translation: ${article.frontmatter.title}`
       : `Add translation: ${article.frontmatter.title}`
-    await this.createOrUpdateFile(path, content, message, article.sha)
+    const { sha } = await this.createOrUpdateFile(path, content, message, article.sha)
     // Update README after saving
     try {
       await this.updateReadme()
     } catch {
       // Don't fail the save if README update fails
     }
+    return { path, sha }
   }
 
   async loadTranslation(path: string): Promise<Article> {

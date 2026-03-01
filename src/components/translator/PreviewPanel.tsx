@@ -120,12 +120,23 @@ ${htmlContent}
     setSaving(true);
     try {
       const parsed = parseMarkdown(previewContent);
-      await githubService.saveTranslation({
+      const mergedFrontmatter = { ...metadata, ...parsed.frontmatter };
+      const { path, sha } = await githubService.saveTranslation({
         path: editingArticle?.path ?? '',
-        frontmatter: { ...metadata, ...parsed.frontmatter },
+        frontmatter: mergedFrontmatter,
         content: parsed.content,
         originalText: parsed.originalText ?? originalText,
         sha: editingArticle?.sha,
+      });
+      // Update editingArticle so subsequent saves use the correct path & SHA
+      useTranslatorStore.setState({
+        editingArticle: {
+          path,
+          sha,
+          frontmatter: mergedFrontmatter,
+          content: parsed.content,
+          originalText: parsed.originalText ?? originalText,
+        },
       });
       toast.success('已儲存到 GitHub');
     } catch (err) {
