@@ -23,4 +23,5 @@ export interface ArticleSummary {
   author: string;
   date: string;
   original_language: string;
+  sha: string;
 }

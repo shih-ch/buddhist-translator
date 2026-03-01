@@ -14,6 +14,7 @@ interface ArticlesState {
 
   fetchArticles: () => Promise<void>
   fetchResearchFiles: () => Promise<void>
+  deleteArticle: (path: string, sha: string) => Promise<void>
   getArticlesByMonth: () => Record<string, ArticleSummary[]>
   getAuthors: () => string[]
   invalidateCache: () => void
@@ -49,6 +50,20 @@ export const useArticlesStore = create<ArticlesState>((set, get) => ({
     } catch (err) {
       console.error('Failed to fetch research files:', err)
       toast.error(`載入研究資料失敗：${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  },
+
+  deleteArticle: async (path: string, sha: string) => {
+    try {
+      await githubService.deleteFile(path, sha, `Delete article: ${path}`)
+      set((state) => ({
+        articles: state.articles.filter((a) => a.path !== path),
+      }))
+      toast.success('文章已刪除')
+      githubService.updateReadme().catch(console.error)
+    } catch (err) {
+      console.error('Failed to delete article:', err)
+      toast.error(`刪除失敗：${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   },
 

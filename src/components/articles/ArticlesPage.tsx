@@ -14,6 +14,7 @@ export function ArticlesPageContent() {
     isLoading,
     fetchArticles,
     fetchResearchFiles,
+    deleteArticle,
     getAuthors,
   } = useArticlesStore()
 
@@ -75,7 +76,7 @@ export function ArticlesPageContent() {
         />
         <Card>
           <CardContent className="p-0">
-            <ArticleList articles={filtered} />
+            <ArticleList articles={filtered} onDelete={deleteArticle} />
           </CardContent>
         </Card>
       </div>

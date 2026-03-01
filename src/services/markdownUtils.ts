@@ -208,7 +208,7 @@ export function parseFrontmatterOnly(raw: string): ArticleFrontmatter | null {
 /**
  * Convert frontmatter + path into ArticleSummary.
  */
-export function toSummary(path: string, fm: ArticleFrontmatter): import('@/types/article').ArticleSummary {
+export function toSummary(path: string, fm: ArticleFrontmatter): Omit<import('@/types/article').ArticleSummary, 'sha'> {
   return {
     path,
     title: fm.title,

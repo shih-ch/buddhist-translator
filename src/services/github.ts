@@ -215,21 +215,21 @@ class GitHubService {
       const treeUrl = `${this.apiBase}/repos/${this.owner}/${this.repo}/git/trees/${this.branch}?recursive=1`
       const res = await this.apiFetch(treeUrl)
       const data = await res.json()
-      const mdFiles: string[] = (data.tree ?? [])
+      const mdFiles: { path: string; sha: string }[] = (data.tree ?? [])
         .filter((item: { path: string; type: string }) =>
           item.type === 'blob' && item.path.startsWith('translations/') && item.path.endsWith('.md')
         )
-        .map((item: { path: string }) => item.path)
+        .map((item: { path: string; sha: string }) => ({ path: item.path, sha: item.sha }))
 
-      for (const filePath of mdFiles) {
+      for (const file of mdFiles) {
         try {
-          const { content } = await this.getFile(filePath)
+          const { content } = await this.getFile(file.path)
           const fm = parseFrontmatterOnly(content)
           if (fm) {
-            summaries.push(toSummary(filePath, fm))
+            summaries.push({ ...toSummary(file.path, fm), sha: file.sha })
           }
         } catch (err) {
-          console.error(`[listTranslations] failed to read ${filePath}:`, err)
+          console.error(`[listTranslations] failed to read ${file.path}:`, err)
         }
       }
     } catch (err) {
