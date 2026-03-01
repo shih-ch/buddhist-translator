@@ -3,6 +3,7 @@ import { useCostTrackingStore } from '@/stores/costTrackingStore';
 import { AI_PROVIDERS } from '@/stores/aiModels';
 import type { AIFunctionConfig, AIProviderId } from '@/types/settings';
 import type { AIMessage, AIResponse } from './types';
+import { toast } from 'sonner';
 
 /**
  * Wrapper around callFunction that automatically records cost/usage data.
@@ -14,10 +15,13 @@ export async function trackedCallFunction(
   options?: CallFunctionOptions,
   functionType?: string
 ): Promise<AIResponse> {
-  const response = await callFunction(functionConfig, apiKeys, messages, options);
-
   const providerId = options?.overrideProvider ?? functionConfig.provider;
   const modelId = options?.overrideModel ?? functionConfig.model;
+  const providerName = AI_PROVIDERS[providerId]?.name ?? providerId;
+
+  toast.info(`${functionConfig.name}：${providerName} / ${modelId}`, { duration: 3000 });
+
+  const response = await callFunction(functionConfig, apiKeys, messages, options);
 
   // Calculate cost
   const providerModels = AI_PROVIDERS[providerId];
