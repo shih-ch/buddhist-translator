@@ -7,6 +7,7 @@ import {
   DEFAULT_URL_CLEANUP_PROMPT,
   DEFAULT_DICTIONARY_LOOKUP_PROMPT,
   DEFAULT_GLOSSARY_FILL_PROMPT,
+  DEFAULT_SOURCE_FORMATTING_PROMPT,
 } from './defaultPrompts'
 import { usePromptHistoryStore } from './promptHistoryStore'
 
@@ -46,6 +47,15 @@ const DEFAULT_FUNCTIONS: AIFunctionConfig[] = [
     model: 'gpt-4.1-mini',
     prompt: DEFAULT_URL_CLEANUP_PROMPT,
     defaultPrompt: DEFAULT_URL_CLEANUP_PROMPT,
+  },
+  {
+    id: 'source_formatting',
+    name: '原文排版',
+    description: '用 AI 整理原文的段落結構與格式',
+    provider: 'openai',
+    model: 'gpt-4.1-mini',
+    prompt: DEFAULT_SOURCE_FORMATTING_PROMPT,
+    defaultPrompt: DEFAULT_SOURCE_FORMATTING_PROMPT,
   },
   {
     id: 'dictionary_lookup',

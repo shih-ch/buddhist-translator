@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Eraser } from 'lucide-react';
+import { Eraser, Loader2, Sparkles } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useTranslatorStore } from '@/stores/translatorStore';
+import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { trackedCallFunction } from '@/services/ai/trackedCall';
 import { detectLanguage, getLanguageName } from '@/services/languageDetect';
 import { toast } from 'sonner';
 
@@ -46,6 +49,7 @@ function cleanPastedText(text: string): { cleaned: string; removedCount: number 
 export function PasteInput() {
   const { originalText, setOriginalText, updateMetadata } = useTranslatorStore();
   const [detectedLang, setDetectedLang] = useState('');
+  const [formatting, setFormatting] = useState(false);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -78,6 +82,30 @@ export function PasteInput() {
       toast.success(`已清除 ${removedCount} 處分隔線`);
     } else {
       toast.info('沒有需要清理的內容');
+    }
+  }, [originalText, setOriginalText]);
+
+  const handleAIFormat = useCallback(async () => {
+    if (!originalText.trim()) return;
+    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('source_formatting');
+    const apiKeys = useSettingsStore.getState().apiKeys;
+    if (!apiKeys[fnConfig.provider]) {
+      toast.error('請先在設定中填入 API Key');
+      return;
+    }
+    setFormatting(true);
+    try {
+      const messages = [
+        { role: 'system' as const, content: fnConfig.prompt },
+        { role: 'user' as const, content: originalText },
+      ];
+      const response = await trackedCallFunction(fnConfig, apiKeys, messages, undefined, 'source_formatting');
+      setOriginalText(response.content.trim());
+      toast.success('原文排版完成');
+    } catch (err) {
+      toast.error(`排版失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setFormatting(false);
     }
   }, [originalText, setOriginalText]);
 
@@ -117,6 +145,22 @@ export function PasteInput() {
             >
               <Eraser className="h-3 w-3 mr-0.5" />
               清除分隔線
+            </Button>
+          )}
+          {charCount > 20 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 text-[10px] px-1.5"
+              onClick={handleAIFormat}
+              disabled={formatting}
+            >
+              {formatting ? (
+                <Loader2 className="h-3 w-3 mr-0.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3 w-3 mr-0.5" />
+              )}
+              AI 排版
             </Button>
           )}
         </div>
