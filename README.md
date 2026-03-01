@@ -20,6 +20,7 @@
 - [AI 功能配置](#ai-功能配置)
 - [快捷鍵](#快捷鍵)
 - [技術架構](#技術架構)
+- [資料儲存與備份](#資料儲存)
 - [常見問題](#常見問題)
 
 ---
@@ -33,9 +34,9 @@
 | **翻譯參數** | 逐行對照、五欄模式、校對模式、中繼翻譯等 11 種預設 |
 | **線上梵文辭典** | 整合 C-SALT API (Monier-Williams + Buddhist Hybrid Sanskrit) |
 | **AI 辭典查詢** | 佛學術語詞源、定義、中文翻譯查詢 |
-| **術語表管理** | 建立、編輯、匯出佛學術語表，支援分類與語言篩選 |
+| **術語表管理** | 建立、編輯、匯出佛學術語表，支援分類與語言篩選、AI 批次補齊翻譯 |
 | **翻譯記憶 (TM)** | 自動記錄並建議相似翻譯，減少重複工作 |
-| **術語自動標註** | 翻譯預覽中自動標示術語表詞彙，hover 顯示定義 |
+| **術語自動標註** | 翻譯預覽中自動標示梵文/藏文/Wylie 術語，hover 顯示定義 |
 | **術語一致性檢查** | 自動檢查翻譯中術語是否一致 |
 | **CBETA 大正藏** | 輸入經號（如 T0001）直接從大正藏擷取經文翻譯 |
 | **GitHub 整合** | 文章同步、術語表同步、翻譯記錄 |
@@ -109,6 +110,8 @@ npm run preview
 ```
 
 ### 部署到 GitHub Pages
+
+線上版本：**https://shih-ch.github.io/buddhist-translator/**
 
 1. 在 `vite.config.ts` 中 `base` 已設定為 `/buddhist-translator/`
 2. 建置後將 `dist/` 目錄內容推送至 `gh-pages` 分支：
@@ -221,8 +224,10 @@ npx gh-pages -d dist
 
 #### 術語自動標註
 
-- 翻譯預覽中自動將術語表已有詞彙以黃色底色標註
-- Hover 時顯示 Tooltip：原文 → 翻譯、梵文、分類、備註
+- 翻譯預覽中自動將梵文 (IAST/Sanskrit)、藏文、Wylie 術語以黃色底色標註
+- 僅標註 sanskrit、tibetan、wylie 三個欄位的反查（不標註英文原文和中文翻譯）
+- 排除「人名」和「地名」分類，避免誤標
+- Hover 時顯示 Tooltip：原文 → 翻譯、梵文、藏文、Wylie、分類、定義、備註
 - 可在預覽面板右上角切換開啟/關閉
 
 #### 術語一致性檢查
@@ -281,33 +286,38 @@ npx gh-pages -d dist
 
 ### 4. 術語表 (/glossary)
 
-佛學術語集中管理：
+佛學術語集中管理，術語表存為 GitHub 倉庫根目錄的 `glossary.json`。
 
-- **新增/編輯術語**：
-  - 原文 (original)
-  - 中文翻譯 (translation)
-  - 梵文對照 (sanskrit)
+- **術語欄位**：
+  - 原文 (original)、中文翻譯 (translation)
+  - 梵文/IAST (sanskrit)、藏文 (tibetan)、威利轉寫 (wylie)
   - 原文語言（梵文/巴利文/藏文/中文/英文/其他）
   - 分類（概念/人物/地名/修行法門/典籍/本尊/咒語）
-  - 備註 (notes)
-  - 來源文章 (source_article)
+  - 定義 (definition)、連結 (link)、備註 (notes)、來源文章 (source_article)
 
-- **批次操作**：
-  - 勾選多個術語，批次刪除
-  - 全選/取消全選
+- **匯入方式**：
+  - **CSV 匯入**：匯入 CSV 檔案批次加入術語，自動跳過重複，支援彈性欄名
+  - **84000 匯入**：從 [84000](https://84000.co/) 的 bo/wy JSON 檔案匯入藏文術語（約 32K 筆），第二次匯入自動合併 tibetan/wylie 欄位
+  - **術語提取**：翻譯完成後可 AI 一鍵從文章中提取佛學術語
 
-- **篩選與搜尋**：
-  - 按分類篩選
-  - 按語言篩選
-  - 關鍵字搜尋
+- **AI 批次補齊翻譯**：
+  - 工具列「AI 補齊 (N)」按鈕，N 為缺少中文翻譯的術語數量
+  - 分批 50 筆送 AI 翻譯，有進度條、可中途取消
+  - AI 翻譯的術語備註自動加上 `[AI翻譯]` 標記
+  - 可在設定頁調整使用的 AI 模型（預設 Gemini Flash）
+  - 「AI 翻譯」篩選按鈕可快速查看所有 AI 產生的翻譯（藍色字體）
 
-- **匯入/匯出 CSV**：
-  - 匯出所有術語為 CSV 檔案（含所有欄位）
-  - 匯入 CSV 檔案批次加入術語，支援 BOM、引號欄位
-  - 自動跳過重複術語（按原文比對）
-  - 支援彈性欄名（英文或中文欄名皆可）
+- **單筆 AI 補齊**：編輯術語時，翻譯欄旁的 ✨ 按鈕可單筆 AI 翻譯
 
-- **GitHub 同步**：術語表可同步到 GitHub 倉庫
+- **批次操作**：勾選多個術語批次刪除
+
+- **篩選與搜尋**：按分類、語言、AI 翻譯標籤篩選；關鍵字搜尋（含備註欄位）
+
+- **匯出 CSV**：匯出所有術語為 CSV 檔案（含所有欄位）
+
+- **GitHub 同步**：術語表自動同步到 GitHub 倉庫的 `glossary.json`（支援 >1MB 大檔案）
+
+- **術語標註**：翻譯預覽中自動標示梵文 (IAST)、藏文、Wylie 術語，hover 顯示完整資訊
 
 - **統計**：顯示各分類、各語言的術語數量
 
@@ -328,7 +338,7 @@ npx gh-pages -d dist
 
 #### AI 功能配置
 
-可自訂五個 AI 功能的服務商、模型、提示詞：
+可自訂六個 AI 功能的服務商、模型、提示詞：
 
 | 功能 | 預設模型 | 說明 |
 |------|----------|------|
@@ -337,6 +347,7 @@ npx gh-pages -d dist
 | **術語提取** | GPT-4.1-mini | 從翻譯中提取術語 |
 | **網頁摘取** | GPT-4.1-mini | 清理 URL 擷取的內容 |
 | **辭典查詢** | GPT-4.1-mini | AI 佛學術語查詢 |
+| **術語翻譯補齊** | Gemini 2.0 Flash | 批次/單筆 AI 補齊術語表中文翻譯 |
 
 每個功能可獨立設定：
 - 選擇服務商（OpenAI / Anthropic / Google / Perplexity）
@@ -564,19 +575,61 @@ src/
 
 ### 資料儲存
 
-所有使用者資料儲存在瀏覽器 `localStorage` 中：
+使用者資料儲存在瀏覽器 `localStorage`，部分資料同步至 GitHub。
 
-| Key | 內容 |
-|-----|------|
-| `bt-settings` | API Key、GitHub 設定 |
-| `bt-ai-functions` | AI 功能配置 |
-| `bt-translation-presets` | 翻譯預設 |
-| `bt-glossary` | 術語表 |
-| `bt-translation-memory` | 翻譯記憶 |
-| `bt-cost-tracking` | 費用記錄 |
-| `bt-correction-shortcuts` | 校正快捷鍵 |
-| `bt-prompt-history` | 提示詞歷史 |
-| `bt-saved-versions` | 翻譯版本存檔 |
+#### localStorage（本機）
+
+| Key | 內容 | 同步至 GitHub |
+|-----|------|:---:|
+| `bt-apikeys` | AI API 金鑰（OpenAI、Anthropic、Google、Perplexity） | |
+| `bt-github-token` | GitHub Personal Access Token | |
+| `bt-github-repo` | GitHub 倉庫名稱 | |
+| `bt-github-branch` | GitHub 分支名稱 | |
+| `bt-preferences` | 使用者偏好（最後使用的 preset） | |
+| `bt-ai-functions` | AI 功能配置（provider/model/prompt） | ✓ `config.json` |
+| `bt-translation-presets` | 翻譯預設組合 | ✓ `config.json` |
+| `bt-glossary-cache` | 術語表快取 | ✓ `glossary.json` |
+| `bt-cost-tracking` | AI 用量/費用追蹤紀錄 | |
+| `bt-prompt-history` | Prompt 修改歷史 | |
+| `bt-correction-shortcuts` | 校對快捷鍵設定 | |
+| `bt-translation-memory` | 翻譯記憶（歷史翻譯對照） | |
+| `bt-saved-versions` | 翻譯版本紀錄 | |
+
+> **注意**：API 金鑰和 GitHub Token 以明文存放於 localStorage。
+
+#### GitHub 倉庫檔案結構
+
+```
+<repo>/
+├── README.md                    # 自動產生的文章索引
+├── glossary.json                # 術語表（>1MB 使用 Git Blob API 讀取）
+├── config.json                  # AI 功能設定 + 翻譯預設
+├── translation_logs.json        # 翻譯紀錄
+├── translations/                # 翻譯文章（Markdown + YAML frontmatter）
+│   ├── 2026-02-28-article.md
+│   └── ...
+└── research/                    # 研究資料
+    └── ...
+```
+
+#### 備份與還原
+
+所有 `bt-` 開頭的 localStorage 資料可透過設定頁一鍵備份：
+
+1. **設定** → **設定匯出/匯入** → **匯出設定**
+2. 下載 `bt-settings-YYYY-MM-DD.json`（包含所有本機資料）
+3. 在新裝置/瀏覽器 → **匯入設定** → 選擇 JSON 檔案 → 自動還原
+
+| 資料類型 | 清除瀏覽器後如何復原 |
+|---------|-------------------|
+| API 金鑰、GitHub Token | 需從匯出的 JSON 匯入，或重新手動填寫 |
+| AI 功能設定、翻譯預設 | 自動從 GitHub `config.json` 同步 |
+| 術語表 | 自動從 GitHub `glossary.json` 同步 |
+| 翻譯文章 | 自動從 GitHub 倉庫載入 |
+| 費用追蹤、翻譯記憶、版本紀錄 | **只存本地**，需從匯出的 JSON 匯入 |
+| Prompt 歷史、校對快捷鍵 | **只存本地**，需從匯出的 JSON 匯入 |
+
+> 建議定期匯出設定備份，特別是費用追蹤和翻譯記憶等僅存本地的資料。
 
 ---
 
@@ -607,7 +660,13 @@ src/
 
 ### Q: 如何備份我的設定？
 
-進入 **設定 → 資料匯出/匯入**，點擊「匯出」即可下載包含所有設定的 JSON 檔案。在新裝置上「匯入」即可還原。
+進入 **設定 → 設定匯出/匯入**，點擊「匯出設定」即可下載 `bt-settings-YYYY-MM-DD.json`，包含所有 localStorage 資料（API 金鑰、設定、費用追蹤、翻譯記憶等）。在新裝置上「匯入設定」即可還原。
+
+> 術語表和翻譯文章有 GitHub 同步，清除瀏覽器資料後會自動從 GitHub 拉回。但費用追蹤、翻譯記憶、版本紀錄等只存本地，一定要靠匯出備份。
+
+### Q: 術語表存在哪裡？
+
+術語表存為 GitHub 倉庫根目錄的 `glossary.json`，同時快取在瀏覽器 localStorage (`bt-glossary-cache`)。檔案超過 1MB 時自動使用 Git Blob API 讀取。本地快取滿了會自動去除 definition 欄位以節省空間。
 
 ### Q: 在 Linux 上輸入框出現一堆 `+++`？
 
