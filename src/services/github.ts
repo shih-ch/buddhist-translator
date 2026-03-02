@@ -1,5 +1,6 @@
 import { useSettingsStore } from '@/stores/settingsStore'
 import type { Article, ArticleSummary } from '@/types/article'
+import type { ArticleImage } from '@/stores/translatorStore'
 import type { Glossary } from '@/types/glossary'
 import type { AppConfig } from '@/types/settings'
 import {
@@ -186,9 +187,9 @@ class GitHubService {
 
   // ─── Translation Operations ───
 
-  async saveTranslation(article: Article): Promise<{ path: string; sha: string }> {
+  async saveTranslation(article: Article, images?: ArticleImage[]): Promise<{ path: string; sha: string }> {
     const path = article.path || generateFilePath(article.frontmatter.date, article.frontmatter.title)
-    const content = assembleMarkdown(article.frontmatter, article.content, article.originalText)
+    const content = assembleMarkdown(article.frontmatter, article.content, article.originalText, images)
     const message = article.sha
       ? `Update translation: ${article.frontmatter.title}`
       : `Add translation: ${article.frontmatter.title}`
@@ -434,6 +435,46 @@ class GitHubService {
     log('更新 README...')
     await this.updateReadme()
     log('遷移完成！')
+  }
+
+  // ─── Image Upload ───
+
+  async uploadImage(
+    filePath: string,
+    file: File
+  ): Promise<{ sha: string; path: string; url: string }> {
+    const buffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    for (const b of bytes) binary += String.fromCharCode(b)
+    const base64 = btoa(binary)
+
+    const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${encodePath(filePath)}`
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: `Add image: ${file.name}`,
+        content: base64,
+        branch: this.branch,
+      }),
+    })
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`圖片上傳失敗 ${res.status}: ${body}`)
+    }
+
+    const data = await res.json()
+    return {
+      sha: data.content.sha,
+      path: filePath,
+      url: `https://raw.githubusercontent.com/${this.owner}/${this.repo}/${this.branch}/${filePath}`,
+    }
   }
 
   // ─── Utilities ───

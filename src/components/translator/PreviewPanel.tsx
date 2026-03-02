@@ -13,6 +13,7 @@ import { ParallelView } from './ParallelView';
 import { ConsistencyReport } from './ConsistencyReport';
 import { VersionCompare } from './VersionCompare';
 import { VersionManager } from './VersionManager';
+import { ImageUploader } from './ImageUploader';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -36,6 +37,7 @@ export function PreviewPanel() {
   const githubToken = useSettingsStore((s) => s.githubToken);
   const editingArticle = useTranslatorStore((s) => s.editingArticle);
   const originalText = useTranslatorStore((s) => s.originalText);
+  const articleImages = useTranslatorStore((s) => s.articleImages);
   const saveVersion = useTranslatorStore((s) => s.saveVersion);
   const savedVersions = useTranslatorStore((s) => s.savedVersions);
 
@@ -121,13 +123,16 @@ ${htmlContent}
     try {
       const parsed = parseMarkdown(previewContent);
       const mergedFrontmatter = { ...metadata, ...parsed.frontmatter };
-      const { path, sha } = await githubService.saveTranslation({
-        path: editingArticle?.path ?? '',
-        frontmatter: mergedFrontmatter,
-        content: parsed.content,
-        originalText: parsed.originalText ?? originalText,
-        sha: editingArticle?.sha,
-      });
+      const { path, sha } = await githubService.saveTranslation(
+        {
+          path: editingArticle?.path ?? '',
+          frontmatter: mergedFrontmatter,
+          content: parsed.content,
+          originalText: parsed.originalText ?? originalText,
+          sha: editingArticle?.sha,
+        },
+        articleImages.length > 0 ? articleImages : undefined
+      );
       // Update editingArticle so subsequent saves use the correct path & SHA
       useTranslatorStore.setState({
         editingArticle: {
@@ -312,6 +317,7 @@ ${htmlContent}
           {copied ? <Check className="size-3 mr-1" /> : <Copy className="size-3 mr-1" />}
           {copied ? '已複製' : '複製'}
         </Button>
+        <ImageUploader />
       </div>
 
       {/* Dialogs */}

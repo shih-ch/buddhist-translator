@@ -15,6 +15,13 @@ import { useCostTrackingStore } from '@/stores/costTrackingStore';
 import { useTranslationMemoryStore } from '@/stores/translationMemoryStore';
 import { toast } from 'sonner';
 
+export interface ArticleImage {
+  name: string;
+  url: string;
+  path: string;
+  sha: string;
+}
+
 export interface SavedVersion {
   id: string;
   name: string;
@@ -86,6 +93,9 @@ interface TranslatorState {
   // Versions
   savedVersions: SavedVersion[];
 
+  // Images
+  articleImages: ArticleImage[];
+
   // Editing (from Articles page)
   editingArticle: Article | null;
 
@@ -104,6 +114,8 @@ interface TranslatorState {
   setPreviewContent: (content: string) => void;
   setPreviewMode: (mode: 'rendered' | 'source') => void;
   setCurrentModel: (provider: AIProviderId, model: string) => void;
+  addArticleImage: (img: ArticleImage) => void;
+  removeArticleImage: (path: string) => void;
   loadArticleForEdit: (article: Article) => void;
   stopGeneration: () => void;
   reset: () => void;
@@ -193,6 +205,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   previewContent: '',
   previewMode: 'rendered',
   savedVersions: loadVersions(),
+  articleImages: [],
   editingArticle: null,
   abortController: null,
 
@@ -426,7 +439,8 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     set({ metadata });
 
     // First, assemble with updated metadata
-    const md = assembleMarkdown(metadata, msg.content, state.originalText || undefined);
+    const images = state.articleImages.length > 0 ? state.articleImages : undefined;
+    const md = assembleMarkdown(metadata, msg.content, state.originalText || undefined, images);
     set({ previewContent: md });
 
     // Save to translation memory
@@ -457,7 +471,8 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
             ...(extracted.author ? { author: extracted.author } : {}),
           };
           set({ metadata: updated });
-          const newMd = assembleMarkdown(updated, msg.content, get().originalText || undefined);
+          const imgs = get().articleImages.length > 0 ? get().articleImages : undefined;
+          const newMd = assembleMarkdown(updated, msg.content, get().originalText || undefined, imgs);
           set({ previewContent: newMd });
           const parts: string[] = [];
           if (extracted.title) parts.push(`標題：${extracted.title}`);
@@ -494,6 +509,12 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   setPreviewContent: (content) => set({ previewContent: content }),
 
   setPreviewMode: (mode) => set({ previewMode: mode }),
+
+  addArticleImage: (img) =>
+    set((state) => ({ articleImages: [...state.articleImages, img] })),
+
+  removeArticleImage: (path) =>
+    set((state) => ({ articleImages: state.articleImages.filter((i) => i.path !== path) })),
 
   loadArticleForEdit: (article) => {
     // Create synthetic chat messages so user sees the original conversation
@@ -586,6 +607,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
       previewContent: '',
       previewMode: 'rendered',
       savedVersions: [],
+      articleImages: [],
       editingArticle: null,
       abortController: null,
     }),

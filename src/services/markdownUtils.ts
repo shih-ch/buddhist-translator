@@ -1,4 +1,5 @@
 import type { ArticleFrontmatter } from '@/types/article';
+import type { ArticleImage } from '@/stores/translatorStore';
 import { getLanguageName } from '@/services/languageDetect';
 
 // ─── Simple YAML frontmatter parser (browser-safe, no Buffer dependency) ───
@@ -58,7 +59,8 @@ function parseFrontmatterRaw(md: string): { data: Record<string, unknown>; conte
 export function assembleMarkdown(
   frontmatter: ArticleFrontmatter,
   translatedContent: string,
-  originalText?: string
+  originalText?: string,
+  images?: ArticleImage[]
 ): string {
   const fm: Record<string, unknown> = {
     title: frontmatter.title,
@@ -92,6 +94,13 @@ export function assembleMarkdown(
 
   let md = yamlLines.join('\n') + '\n\n';
   md += translatedContent.trim() + '\n';
+
+  if (images && images.length > 0) {
+    md += '\n---\n\n';
+    for (const img of images) {
+      md += `![${img.name}](${img.url})\n\n`;
+    }
+  }
 
   if (originalText && originalText.trim()) {
     md += '\n---\n\n';
