@@ -6,6 +6,23 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { githubService } from '@/services/github';
 import { toast } from 'sonner';
 
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB (base64 膨脹 ~33% 後仍在 GitHub 限制內)
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Add timestamp suffix to avoid duplicate filenames */
+function deduplicateName(name: string): string {
+  const dot = name.lastIndexOf('.');
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : '';
+  return `${base}_${Date.now()}${ext}`;
+}
+
 export function ImageUploader() {
   const articleImages = useTranslatorStore((s) => s.articleImages);
   const addArticleImage = useTranslatorStore((s) => s.addArticleImage);
@@ -32,9 +49,21 @@ export function ImageUploader() {
 
     let successCount = 0;
     for (const file of Array.from(files)) {
+      // Validate file type
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        toast.error(`不支援的檔案格式：${file.name}（僅支援 JPEG、PNG、GIF、WebP、SVG）`);
+        continue;
+      }
+
+      // Validate file size
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`檔案過大：${file.name}（${formatSize(file.size)}，上限 ${formatSize(MAX_FILE_SIZE)}）`);
+        continue;
+      }
+
       try {
-        // Sanitize filename: keep extension, replace spaces
-        const safeName = file.name.replace(/\s+/g, '_');
+        // Sanitize filename and deduplicate to avoid GitHub 422 conflict
+        const safeName = deduplicateName(file.name.replace(/\s+/g, '_'));
         const filePath = `images/${year}/${month}/${safeName}`;
 
         toast.loading(`上傳中：${file.name}`, { id: `upload-${file.name}` });
