@@ -11,14 +11,15 @@ import {
   DEFAULT_TRANSLATION_FORMATTING_PROMPT,
 } from './defaultPrompts'
 import { usePromptHistoryStore } from './promptHistoryStore'
+import { DEFAULT_TRANSLATION_MODEL } from './aiModels'
 
 const DEFAULT_FUNCTIONS: AIFunctionConfig[] = [
   {
     id: 'translation',
     name: '翻譯',
     description: '將佛學文章翻譯為繁體中文',
-    provider: 'openai',
-    model: 'gpt-5.1',
+    provider: DEFAULT_TRANSLATION_MODEL.provider,
+    model: DEFAULT_TRANSLATION_MODEL.model,
     prompt: DEFAULT_TRANSLATION_PROMPT,
     defaultPrompt: DEFAULT_TRANSLATION_PROMPT,
   },
@@ -243,7 +244,7 @@ export const useAIFunctionsStore = create<AIFunctionsState>((set, get) => ({
     set((state) => {
       const updated = state.functions.map((f) => {
         const remote = funcs[f.id]
-        return remote ? { ...f, provider: remote.provider, model: remote.model, prompt: remote.prompt } : f
+        return remote ? { ...f, provider: remote.provider, model: remote.model, prompt: remote.prompt, defaultPrompt: remote.prompt } : f
       })
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
       localStorage.setItem(PRESETS_KEY, JSON.stringify(presets))

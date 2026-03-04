@@ -5,12 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 
 const BT_PREFIX = 'bt-';
+const SENSITIVE_KEYS = ['bt-apikeys', 'bt-github-token'];
 
-function collectData(): Record<string, string> {
+function collectData(includeSensitive: boolean): Record<string, string> {
   const result: Record<string, string> = {};
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (key?.startsWith(BT_PREFIX)) {
+      if (!includeSensitive && SENSITIVE_KEYS.includes(key)) continue;
       result[key] = localStorage.getItem(key)!;
     }
   }
@@ -20,8 +22,8 @@ function collectData(): Record<string, string> {
 export function DataExportImport() {
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleExport = () => {
-    const data = collectData();
+  const doExport = (includeSensitive: boolean) => {
+    const data = collectData(includeSensitive);
     const count = Object.keys(data).length;
     if (count === 0) {
       toast.error('沒有找到任何設定資料');
@@ -34,7 +36,14 @@ export function DataExportImport() {
     a.download = `bt-settings-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success(`已匯出 ${count} 筆設定`);
+    toast.success(`已匯出 ${count} 筆設定${includeSensitive ? '（含 API Keys）' : ''}`);
+  };
+
+  const handleExport = () => doExport(false);
+  const handleExportWithKeys = () => {
+    if (confirm('匯出檔案將包含 API Keys 和 GitHub Token，請妥善保管。確定要包含？')) {
+      doExport(true);
+    }
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,12 +78,16 @@ export function DataExportImport() {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-xs text-muted-foreground">
-          匯出所有本地設定（API Keys、GitHub Token、AI 功能設定、翻譯預設等）為 JSON 檔案，可在其他瀏覽器或環境匯入還原。
+          匯出本地設定（AI 功能設定、翻譯預設等）為 JSON 檔案。預設不含 API Keys，可選擇包含。
         </p>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="mr-1 h-3 w-3" />
             匯出設定
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportWithKeys}>
+            <Download className="mr-1 h-3 w-3" />
+            含 Keys
           </Button>
           <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
             <Upload className="mr-1 h-3 w-3" />

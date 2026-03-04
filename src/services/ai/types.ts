@@ -38,7 +38,8 @@ export interface AIProviderAdapter {
     messages: AIMessage[],
     model: string,
     apiKey: string,
-    stream?: StreamCallbacks
+    stream?: StreamCallbacks,
+    signal?: AbortSignal
   ): Promise<AIResponse>;
   testConnection(apiKey: string): Promise<boolean>;
 }

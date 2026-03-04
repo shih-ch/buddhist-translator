@@ -58,6 +58,7 @@ export function TermExtractor({ open, onClose, messageId }: TermExtractorProps) 
     const msg = messages.find((m) => m.id === messageId);
     if (!msg) return;
 
+    let cancelled = false;
     setLoading(true);
     setTerms([]);
 
@@ -72,6 +73,7 @@ export function TermExtractor({ open, onClose, messageId }: TermExtractorProps) 
 
     trackedCallFunction(fnConfig, apiKeys, aiMessages, undefined, 'term_extraction')
       .then((response) => {
+        if (cancelled) return;
         try {
           // Try to parse JSON from the response (may be wrapped in markdown code block)
           let jsonStr = response.content.trim();
@@ -92,10 +94,15 @@ export function TermExtractor({ open, onClose, messageId }: TermExtractorProps) 
         }
       })
       .catch((err) => {
+        if (cancelled) return;
         toast.error(`術語提取失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
         setTerms([]);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
   }, [open, messageId, messages, originalText]);
 
   const toggleTerm = (index: number) => {
@@ -167,7 +174,7 @@ export function TermExtractor({ open, onClose, messageId }: TermExtractorProps) 
             <div className="space-y-2">
               {terms.map((term, i) => (
                 <div
-                  key={i}
+                  key={`${term.original}-${i}`}
                   className={`flex items-start gap-2 rounded-md border p-2 text-sm ${
                     !term.selected ? 'opacity-50' : ''
                   }`}

@@ -9,7 +9,7 @@ import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useGlossaryStore } from '@/stores/glossaryStore';
 import type { AIMessage } from '@/services/ai/types';
-import { AI_PROVIDERS } from '@/stores/aiModels';
+import { AI_PROVIDERS, DEFAULT_TRANSLATION_MODEL } from '@/stores/aiModels';
 import { logTranslation } from '@/services/translationLogger';
 import { useCostTrackingStore } from '@/stores/costTrackingStore';
 import { useTranslationMemoryStore } from '@/stores/translationMemoryStore';
@@ -40,10 +40,13 @@ function loadVersions(): SavedVersion[] {
   } catch { return []; }
 }
 
-function persistVersions(versions: SavedVersion[]) {
+function persistVersions(versions: SavedVersion[]): boolean {
   try {
     localStorage.setItem(VERSIONS_KEY_PREFIX, JSON.stringify(versions));
-  } catch { /* ignore */ }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const DEFAULT_PARAMS: TranslationParams = {
@@ -203,7 +206,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   activePreset: '一般文章',
   messages: [],
   isLoading: false,
-  currentModel: { provider: 'openai' as AIProviderId, model: 'gpt-5.1' },
+  currentModel: { ...DEFAULT_TRANSLATION_MODEL },
   totalTokens: 0,
   totalCost: 0,
   previewContent: '',
@@ -384,6 +387,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
         {
           overrideProvider: state.currentModel.provider,
           overrideModel: state.currentModel.model,
+          signal: abortController.signal,
           stream: {
             onChunk: (chunk) => {
               set((s) => {
@@ -500,6 +504,8 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
         state.currentModel.model,
         { title: needTitle, author: needAuthor },
       ).then((extracted) => {
+        // Guard: if store was reset while extraction was in-flight, skip
+        if (get().messages.length === 0) return;
         if (extracted.title || extracted.author) {
           const updated = {
             ...get().metadata,
@@ -608,8 +614,11 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     };
     const updated = [...state.savedVersions, version];
     set({ savedVersions: updated });
-    persistVersions(updated);
-    toast.success(`已儲存版本：${version.name}`);
+    if (persistVersions(updated)) {
+      toast.success(`已儲存版本：${version.name}`);
+    } else {
+      toast.error('版本儲存失敗：localStorage 空間不足');
+    }
   },
 
   loadVersion: (index: number) => {
@@ -629,7 +638,8 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     toast.success(`已刪除版本：${name}`);
   },
 
-  reset: () =>
+  reset: () => {
+    get().abortController?.abort();
     set({
       inputMode: 'paste',
       originalText: '',
@@ -639,7 +649,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
       activePreset: '一般文章',
       messages: [],
       isLoading: false,
-      currentModel: { provider: 'openai', model: 'gpt-5.1' },
+      currentModel: { ...DEFAULT_TRANSLATION_MODEL },
       totalTokens: 0,
       totalCost: 0,
       previewContent: '',
@@ -649,5 +659,6 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
       editingArticle: null,
       abortController: null,
       replacementRange: null,
-    }),
+    });
+  },
 }));

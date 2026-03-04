@@ -21,7 +21,8 @@ function buildRequestBody(messages: AIMessage[], model: string, stream: boolean)
 async function callNonStreaming(
   messages: AIMessage[],
   model: string,
-  apiKey: string
+  apiKey: string,
+  signal?: AbortSignal
 ): Promise<AIResponse> {
   const res = await fetch(ENDPOINT, {
     method: 'POST',
@@ -30,6 +31,7 @@ async function callNonStreaming(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(buildRequestBody(messages, model, false)),
+    signal,
   });
 
   if (!res.ok) {
@@ -56,7 +58,8 @@ async function callStreaming(
   messages: AIMessage[],
   model: string,
   apiKey: string,
-  stream: StreamCallbacks
+  stream: StreamCallbacks,
+  signal?: AbortSignal
 ): Promise<AIResponse> {
   const res = await fetch(ENDPOINT, {
     method: 'POST',
@@ -65,6 +68,7 @@ async function callStreaming(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(buildRequestBody(messages, model, true)),
+    signal,
   });
 
   if (!res.ok) {
@@ -78,6 +82,7 @@ async function callStreaming(
   const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
+  let usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
 
   try {
     while (true) {
@@ -102,6 +107,14 @@ async function callStreaming(
             fullText += delta;
             stream.onChunk(delta);
           }
+          // Capture usage from final chunk (OpenAI-compatible API)
+          if (json.usage) {
+            usage = {
+              prompt_tokens: json.usage.prompt_tokens ?? 0,
+              completion_tokens: json.usage.completion_tokens ?? 0,
+              total_tokens: json.usage.total_tokens ?? 0,
+            };
+          }
         } catch {
           // skip malformed JSON
         }
@@ -116,7 +129,7 @@ async function callStreaming(
     content: fullText,
     model,
     provider: 'perplexity',
-    usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    usage,
   };
   stream.onDone(fullText, response.usage);
   return response;
@@ -127,11 +140,11 @@ export const perplexityAdapter: AIProviderAdapter = {
   name: 'Perplexity',
   models: PERPLEXITY_MODELS,
 
-  async call(messages, model, apiKey, stream) {
+  async call(messages, model, apiKey, stream, signal) {
     if (stream) {
-      return callStreaming(messages, model, apiKey, stream);
+      return callStreaming(messages, model, apiKey, stream, signal);
     }
-    return callNonStreaming(messages, model, apiKey);
+    return callNonStreaming(messages, model, apiKey, signal);
   },
 
   async testConnection(apiKey) {

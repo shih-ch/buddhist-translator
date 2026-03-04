@@ -8,17 +8,22 @@ const OPENAI_MODELS: AIModel[] = [
 const ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 
 function buildRequestBody(messages: AIMessage[], model: string, stream: boolean) {
-  return {
+  const body: Record<string, unknown> = {
     model,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
     stream,
   };
+  if (stream) {
+    body.stream_options = { include_usage: true };
+  }
+  return body;
 }
 
 async function callNonStreaming(
   messages: AIMessage[],
   model: string,
-  apiKey: string
+  apiKey: string,
+  signal?: AbortSignal
 ): Promise<AIResponse> {
   const res = await fetch(ENDPOINT, {
     method: 'POST',
@@ -27,6 +32,7 @@ async function callNonStreaming(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(buildRequestBody(messages, model, false)),
+    signal,
   });
 
   if (!res.ok) {
@@ -53,7 +59,8 @@ async function callStreaming(
   messages: AIMessage[],
   model: string,
   apiKey: string,
-  stream: StreamCallbacks
+  stream: StreamCallbacks,
+  signal?: AbortSignal
 ): Promise<AIResponse> {
   const res = await fetch(ENDPOINT, {
     method: 'POST',
@@ -62,6 +69,7 @@ async function callStreaming(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(buildRequestBody(messages, model, true)),
+    signal,
   });
 
   if (!res.ok) {
@@ -75,6 +83,7 @@ async function callStreaming(
   const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
+  let usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
 
   try {
     while (true) {
@@ -99,6 +108,14 @@ async function callStreaming(
             fullText += delta;
             stream.onChunk(delta);
           }
+          // Capture usage from final chunk (sent when stream_options.include_usage is true)
+          if (json.usage) {
+            usage = {
+              prompt_tokens: json.usage.prompt_tokens ?? 0,
+              completion_tokens: json.usage.completion_tokens ?? 0,
+              total_tokens: json.usage.total_tokens ?? 0,
+            };
+          }
         } catch {
           // skip malformed JSON lines
         }
@@ -113,7 +130,7 @@ async function callStreaming(
     content: fullText,
     model,
     provider: 'openai',
-    usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    usage,
   };
   stream.onDone(fullText, response.usage);
   return response;
@@ -124,11 +141,11 @@ export const openaiAdapter: AIProviderAdapter = {
   name: 'OpenAI',
   models: OPENAI_MODELS,
 
-  async call(messages, model, apiKey, stream) {
+  async call(messages, model, apiKey, stream, signal) {
     if (stream) {
-      return callStreaming(messages, model, apiKey, stream);
+      return callStreaming(messages, model, apiKey, stream, signal);
     }
-    return callNonStreaming(messages, model, apiKey);
+    return callNonStreaming(messages, model, apiKey, signal);
   },
 
   async testConnection(apiKey) {

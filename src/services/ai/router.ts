@@ -21,6 +21,7 @@ export interface CallFunctionOptions {
   stream?: StreamCallbacks;
   overrideProvider?: AIProviderId;
   overrideModel?: string;
+  signal?: AbortSignal;
 }
 
 export async function callFunction(
@@ -42,7 +43,7 @@ export async function callFunction(
     throw new Error(`No API key configured for provider: ${adapter.name}`);
   }
 
-  return adapter.call(messages, modelId, apiKey, options?.stream);
+  return adapter.call(messages, modelId, apiKey, options?.stream, options?.signal);
 }
 
 export function getModelsForProvider(providerId: AIProviderId): AIModel[] {

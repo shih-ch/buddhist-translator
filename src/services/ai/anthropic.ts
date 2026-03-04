@@ -41,7 +41,8 @@ function splitSystemAndMessages(messages: AIMessage[]): {
 async function callNonStreaming(
   messages: AIMessage[],
   model: string,
-  apiKey: string
+  apiKey: string,
+  signal?: AbortSignal
 ): Promise<AIResponse> {
   const { system, messages: apiMessages } = splitSystemAndMessages(messages);
 
@@ -56,6 +57,7 @@ async function callNonStreaming(
     method: 'POST',
     headers: buildHeaders(apiKey),
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!res.ok) {
@@ -82,7 +84,8 @@ async function callStreaming(
   messages: AIMessage[],
   model: string,
   apiKey: string,
-  stream: StreamCallbacks
+  stream: StreamCallbacks,
+  signal?: AbortSignal
 ): Promise<AIResponse> {
   const { system, messages: apiMessages } = splitSystemAndMessages(messages);
 
@@ -98,6 +101,7 @@ async function callStreaming(
     method: 'POST',
     headers: buildHeaders(apiKey),
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!res.ok) {
@@ -169,11 +173,11 @@ export const anthropicAdapter: AIProviderAdapter = {
   name: 'Anthropic',
   models: ANTHROPIC_MODELS,
 
-  async call(messages, model, apiKey, stream) {
+  async call(messages, model, apiKey, stream, signal) {
     if (stream) {
-      return callStreaming(messages, model, apiKey, stream);
+      return callStreaming(messages, model, apiKey, stream, signal);
     }
-    return callNonStreaming(messages, model, apiKey);
+    return callNonStreaming(messages, model, apiKey, signal);
   },
 
   async testConnection(apiKey) {

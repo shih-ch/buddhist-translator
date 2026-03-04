@@ -1,4 +1,4 @@
-import { useMemo, useState, Component, type ReactNode } from 'react';
+import { useMemo, useState, Component, type ReactNode, type HTMLAttributes } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -183,10 +183,10 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
 
   const highlightComponents = shouldHighlight
     ? {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        p: ({ children, ...props }: any) => (
-          <p {...props}>{processChildren(children, regex!, termMap)}</p>
-        ),
+        p: ({ children, ...props }: HTMLAttributes<HTMLParagraphElement> & { node?: unknown }) => {
+          const { node: _, ...rest } = props;
+          return <p {...rest}>{processChildren(children, regex!, termMap)}</p>;
+        },
       }
     : {};
 
@@ -196,12 +196,10 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
       rehypePlugins={[rehypeRaw]}
       components={{
         ...highlightComponents,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        details: (props: any) => (
+        details: ({ node: _, ...props }: HTMLAttributes<HTMLDetailsElement> & { node?: unknown }) => (
           <details className="my-4 rounded border bg-muted/20 p-4" {...props} />
         ),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        summary: (props: any) => (
+        summary: ({ node: _, ...props }: HTMLAttributes<HTMLElement> & { node?: unknown }) => (
           <summary className="cursor-pointer font-medium text-base mb-2" {...props} />
         ),
       }}
@@ -216,12 +214,10 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeRaw]}
       components={{
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        details: (props: any) => (
+        details: ({ node: _, ...props }: HTMLAttributes<HTMLDetailsElement> & { node?: unknown }) => (
           <details className="my-4 rounded border bg-muted/20 p-4" {...props} />
         ),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        summary: (props: any) => (
+        summary: ({ node: _, ...props }: HTMLAttributes<HTMLElement> & { node?: unknown }) => (
           <summary className="cursor-pointer font-medium text-base mb-2" {...props} />
         ),
       }}

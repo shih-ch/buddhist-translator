@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -23,6 +23,7 @@ import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTranslatorStore } from '@/stores/translatorStore';
 import { trackedCallFunction } from '@/services/ai/trackedCall';
+import { splitFrontmatter } from '@/services/markdownUtils';
 import { toast } from 'sonner';
 
 interface MarkdownEditorProps {
@@ -71,6 +72,17 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
   });
   const [selectedRange, setSelectedRange] = useState<{ start: number; end: number; text: string } | null>(null);
   const [formatting, setFormatting] = useState(false);
+  const lastPushedRef = useRef(content);
+
+  // Reset history when content changes externally (e.g. AI format, annotate, version load)
+  useEffect(() => {
+    const h = historyRef.current;
+    if (content !== lastPushedRef.current) {
+      h.stack = [content];
+      h.index = 0;
+      lastPushedRef.current = content;
+    }
+  }, [content]);
 
   const pushHistory = useCallback((newContent: string) => {
     const h = historyRef.current;
@@ -83,6 +95,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       h.stack = h.stack.slice(-50);
       h.index = h.stack.length - 1;
     }
+    lastPushedRef.current = newContent;
   }, []);
 
   const handleChange = useCallback(
@@ -169,17 +182,15 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     }
     setFormatting(true);
     try {
-      const fmMatch = content.match(/^(---\n[\s\S]*?\n---)\n*/);
-      const frontmatterBlock = fmMatch ? fmMatch[1] : '';
-      const body = fmMatch ? content.slice(fmMatch[0].length) : content;
+      const { frontmatter, body } = splitFrontmatter(content);
 
       const messages = [
         { role: 'system' as const, content: fnConfig.prompt },
         { role: 'user' as const, content: body },
       ];
       const response = await trackedCallFunction(fnConfig, apiKeys, messages, undefined, 'translation_formatting');
-      const result = frontmatterBlock
-        ? frontmatterBlock + '\n\n' + response.content.trim() + '\n'
+      const result = frontmatter
+        ? frontmatter + '\n\n' + response.content.trim() + '\n'
         : response.content.trim() + '\n';
       pushHistory(result);
       onChange(result);

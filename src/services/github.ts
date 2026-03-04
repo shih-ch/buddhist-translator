@@ -222,15 +222,17 @@ class GitHubService {
         )
         .map((item: { path: string; sha: string }) => ({ path: item.path, sha: item.sha }))
 
-      for (const file of mdFiles) {
-        try {
+      const results = await Promise.allSettled(
+        mdFiles.map(async (file) => {
           const { content } = await this.getFile(file.path)
           const fm = parseFrontmatterOnly(content)
-          if (fm) {
-            summaries.push({ ...toSummary(file.path, fm), sha: file.sha })
-          }
-        } catch (err) {
-          console.error(`[listTranslations] failed to read ${file.path}:`, err)
+          if (fm) return { ...toSummary(file.path, fm), sha: file.sha }
+          return null
+        })
+      )
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) {
+          summaries.push(result.value)
         }
       }
     } catch (err) {

@@ -166,13 +166,13 @@ export function ParamPresetEditor() {
         {presets.map((preset, i) =>
           editingIndex === i ? (
             <PresetForm
-              key={i}
+              key={preset.name}
               preset={preset}
               onSave={(p) => handleSave(i, p)}
               onCancel={() => setEditingIndex(null)}
             />
           ) : (
-            <div key={i} className="flex items-center justify-between rounded-md border p-3">
+            <div key={preset.name} className="flex items-center justify-between rounded-md border p-3">
               <div className="flex items-center gap-2">
                 <span className="text-lg">{preset.icon}</span>
                 <span className="font-medium">{preset.name}</span>

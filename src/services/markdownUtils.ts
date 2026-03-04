@@ -129,6 +129,15 @@ export function assembleMarkdown(
 }
 
 /**
+ * Quick split of frontmatter block from body without parsing YAML.
+ * Used by annotation/formatting operations that need to preserve frontmatter as-is.
+ */
+export function splitFrontmatter(content: string): { frontmatter: string; body: string } {
+  const m = content.match(/^(---\n[\s\S]*?\n---)\n*/);
+  return { frontmatter: m ? m[1] : '', body: m ? content.slice(m[0].length) : content };
+}
+
+/**
  * Parse a Markdown file into frontmatter, content, and optional original text.
  */
 export function parseMarkdown(md: string): {

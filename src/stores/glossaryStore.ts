@@ -48,14 +48,19 @@ interface GlossaryState {
   exportCsv: () => string
 }
 
+// Mutex to serialize glossary mutations and prevent concurrent write races
+let _persistChain = Promise.resolve()
+
 async function persistToGithub(updated: Glossary) {
   saveToCache(updated)
-  try {
-    await githubService.saveGlossary(updated)
-  } catch (err) {
+  _persistChain = _persistChain.then(
+    () => githubService.saveGlossary(updated),
+    () => githubService.saveGlossary(updated),
+  ).catch((err) => {
     console.error('Failed to save glossary to GitHub:', err)
     toast.error(`術語表同步失敗：${err instanceof Error ? err.message : 'Unknown error'}（本地已保存）`)
-  }
+  })
+  return _persistChain
 }
 
 export const useGlossaryStore = create<GlossaryState>((set, get) => ({

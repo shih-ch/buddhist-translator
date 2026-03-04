@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTranslatorStore } from '@/stores/translatorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { generateSlug, parseMarkdown } from '@/services/markdownUtils';
+import { generateSlug, parseMarkdown, splitFrontmatter } from '@/services/markdownUtils';
 import { githubService } from '@/services/github';
 import { MarkdownPreview } from './MarkdownPreview';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -133,14 +133,11 @@ ${htmlContent}
       toast.error('術語表為空，請先載入術語表');
       return;
     }
-    // Separate frontmatter from body
-    const fmMatch = previewContent.match(/^(---\n[\s\S]*?\n---)\n*/);
-    const frontmatterBlock = fmMatch ? fmMatch[1] : '';
-    const body = fmMatch ? previewContent.slice(fmMatch[0].length) : previewContent;
+    const { frontmatter, body } = splitFrontmatter(previewContent);
 
     const { text, count } = annotateGlossaryTerms(body, terms, mode);
-    const result = frontmatterBlock
-      ? frontmatterBlock + '\n\n' + text
+    const result = frontmatter
+      ? frontmatter + '\n\n' + text
       : text;
     setPreviewContent(result);
     toast.success(`已標注 ${count} 個術語`);
@@ -156,18 +153,15 @@ ${htmlContent}
     }
     setFormatting(true);
     try {
-      // Separate frontmatter from body
-      const fmMatch = previewContent.match(/^(---\n[\s\S]*?\n---)\n*/);
-      const frontmatterBlock = fmMatch ? fmMatch[1] : '';
-      const body = fmMatch ? previewContent.slice(fmMatch[0].length) : previewContent;
+      const { frontmatter, body } = splitFrontmatter(previewContent);
 
       const messages = [
         { role: 'system' as const, content: fnConfig.prompt },
         { role: 'user' as const, content: body },
       ];
       const response = await trackedCallFunction(fnConfig, apiKeys, messages, undefined, 'translation_formatting');
-      const result = frontmatterBlock
-        ? frontmatterBlock + '\n\n' + response.content.trim() + '\n'
+      const result = frontmatter
+        ? frontmatter + '\n\n' + response.content.trim() + '\n'
         : response.content.trim() + '\n';
       setPreviewContent(result);
       toast.success('AI 排版完成');
@@ -179,7 +173,6 @@ ${htmlContent}
   }, [previewContent, setPreviewContent]);
 
   const handleSaveToGithub = async () => {
-    console.log('[Save] previewContent length:', previewContent.length, 'githubToken:', !!githubToken);
     if (!previewContent || !githubToken) {
       toast.error(githubToken ? '沒有可儲存的內容' : '請先在設定中填入 GitHub Token');
       return;
@@ -269,16 +262,14 @@ ${htmlContent}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => {
                     if (!previewContent) return;
-                    const fmMatch = previewContent.match(/^(---\n[\s\S]*?\n---)\n*/);
-                    const frontmatterBlock = fmMatch ? fmMatch[1] : '';
-                    const body = fmMatch ? previewContent.slice(fmMatch[0].length) : previewContent;
+                    const { frontmatter, body } = splitFrontmatter(previewContent);
                     const cleaned = removeAnnotations(body);
                     if (cleaned === body) {
                       toast.info('沒有找到標注');
                       return;
                     }
-                    const result = frontmatterBlock
-                      ? frontmatterBlock + '\n\n' + cleaned
+                    const result = frontmatter
+                      ? frontmatter + '\n\n' + cleaned
                       : cleaned;
                     setPreviewContent(result);
                     toast.success('已移除所有標注');

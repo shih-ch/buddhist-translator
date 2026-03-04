@@ -37,14 +37,16 @@ function buildGeminiBody(messages: AIMessage[]) {
 async function callNonStreaming(
   messages: AIMessage[],
   model: string,
-  apiKey: string
+  apiKey: string,
+  signal?: AbortSignal
 ): Promise<AIResponse> {
-  const url = `${BASE_URL}/${model}:generateContent?key=${apiKey}`;
+  const url = `${BASE_URL}/${model}:generateContent`;
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify(buildGeminiBody(messages)),
+    signal,
   });
 
   if (!res.ok) {
@@ -72,14 +74,16 @@ async function callStreaming(
   messages: AIMessage[],
   model: string,
   apiKey: string,
-  stream: StreamCallbacks
+  stream: StreamCallbacks,
+  signal?: AbortSignal
 ): Promise<AIResponse> {
-  const url = `${BASE_URL}/${model}:streamGenerateContent?key=${apiKey}&alt=sse`;
+  const url = `${BASE_URL}/${model}:streamGenerateContent?alt=sse`;
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify(buildGeminiBody(messages)),
+    signal,
   });
 
   if (!res.ok) {
@@ -149,16 +153,18 @@ export const geminiAdapter: AIProviderAdapter = {
   name: 'Google Gemini',
   models: GEMINI_MODELS,
 
-  async call(messages, model, apiKey, stream) {
+  async call(messages, model, apiKey, stream, signal) {
     if (stream) {
-      return callStreaming(messages, model, apiKey, stream);
+      return callStreaming(messages, model, apiKey, stream, signal);
     }
-    return callNonStreaming(messages, model, apiKey);
+    return callNonStreaming(messages, model, apiKey, signal);
   },
 
   async testConnection(apiKey) {
     try {
-      const res = await fetch(`${BASE_URL}?key=${apiKey}`);
+      const res = await fetch(BASE_URL, {
+        headers: { 'x-goog-api-key': apiKey },
+      });
       return res.ok;
     } catch {
       return false;

@@ -268,9 +268,9 @@ export function DictionaryPanel() {
             <div className="border-t pt-2 mt-3">
               <p className="text-[10px] font-medium text-muted-foreground mb-1">查詢記錄</p>
               <div className="flex flex-wrap gap-1">
-                {history.map((h, i) => (
+                {history.map((h) => (
                   <Badge
-                    key={i}
+                    key={h.term}
                     variant="outline"
                     className="text-[10px] cursor-pointer hover:bg-accent"
                     onClick={() => {
