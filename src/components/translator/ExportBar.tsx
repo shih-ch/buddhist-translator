@@ -10,6 +10,15 @@ import { toast } from 'sonner';
 import React from 'react';
 import { exportPDF, exportDOCX } from '@/services/exportFormats';
 
+async function renderMarkdownToHtml(markdown: string): Promise<string> {
+  const ReactMarkdown = (await import('react-markdown')).default;
+  const remarkGfm = (await import('remark-gfm')).default;
+  const { renderToString } = await import('react-dom/server');
+  return renderToString(
+    React.createElement(ReactMarkdown, { remarkPlugins: [remarkGfm] }, markdown)
+  );
+}
+
 function downloadFile(content: string, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
@@ -41,12 +50,7 @@ export function ExportBar() {
 
   const handleDownloadHtml = async () => {
     if (!previewContent) return;
-    const ReactMarkdown = (await import('react-markdown')).default;
-    const remarkGfm = (await import('remark-gfm')).default;
-    const { renderToString } = await import('react-dom/server');
-    const htmlContent = renderToString(
-      React.createElement(ReactMarkdown, { remarkPlugins: [remarkGfm] }, previewContent)
-    );
+    const htmlContent = await renderMarkdownToHtml(previewContent);
     const fullHtml = `<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -76,12 +80,7 @@ ${htmlContent}
   const handleDownloadPdf = async () => {
     if (!previewContent) return;
     try {
-      const ReactMarkdown = (await import('react-markdown')).default;
-      const remarkGfm = (await import('remark-gfm')).default;
-      const { renderToString } = await import('react-dom/server');
-      const htmlContent = renderToString(
-        React.createElement(ReactMarkdown, { remarkPlugins: [remarkGfm] }, previewContent)
-      );
+      const htmlContent = await renderMarkdownToHtml(previewContent);
       const slug = generateSlug(metadata.title || 'untitled');
       await exportPDF(htmlContent, metadata, `${metadata.date}-${slug}.pdf`);
       toast.success('已下載 PDF');

@@ -23,14 +23,12 @@ export function VersionCompare({ open, onClose }: VersionCompareProps) {
   const previewContent = useTranslatorStore((s) => s.previewContent)
   const [loading, setLoading] = useState(false)
   const [diff, setDiff] = useState<DiffLine[] | null>(null)
-  const [, setSavedContent] = useState('')
 
   const handleFetch = async () => {
     if (!editingArticle?.path) return
     setLoading(true)
     try {
       const { content } = await githubService.getFile(editingArticle.path)
-      setSavedContent(content)
       setDiff(computeDiff(content, previewContent))
     } catch (err) {
       toast.error(`載入失敗：${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -53,7 +51,6 @@ export function VersionCompare({ open, onClose }: VersionCompareProps) {
         if (!v) {
           onClose()
           setDiff(null)
-          setSavedContent('')
         }
       }}
     >
