@@ -130,6 +130,31 @@ export function buildTranslationMessages(
 }
 
 /**
+ * Build messages for retranslating a selected portion of translated text.
+ * Includes the full original source text for context so the AI can locate
+ * the corresponding passage and retranslate it.
+ */
+export function buildRetranslationMessages(
+  systemPrompt: string,
+  fullOriginalText: string,
+  selectedTranslation: string,
+  params: TranslationParams,
+  glossaryTerms: GlossaryTerm[],
+): AIMessage[] {
+  const filteredTerms = filterRelevantTerms(glossaryTerms, fullOriginalText);
+  const glossaryBlock = formatGlossaryBlock(filteredTerms);
+  const fullSystem = systemPrompt + glossaryBlock;
+
+  const paramsBlock = formatParamsBlock(params);
+  const userContent = `${paramsBlock}\n\n【完整原文】\n${fullOriginalText}\n\n【需重新翻譯的譯文段落】\n${selectedTranslation}\n\n請根據完整原文，找到與上述譯文段落對應的原文段落，重新翻譯。只輸出重新翻譯的結果。`;
+
+  return [
+    { role: 'system', content: fullSystem },
+    { role: 'user', content: userContent },
+  ];
+}
+
+/**
  * Build messages for the "formatting" AI function.
  */
 export function buildFormattingMessages(

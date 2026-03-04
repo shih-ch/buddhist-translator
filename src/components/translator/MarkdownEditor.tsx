@@ -161,7 +161,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
 
   const handleAIFormat = useCallback(async () => {
     if (!content) return;
-    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('source_formatting');
+    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('translation_formatting');
     const apiKeys = useSettingsStore.getState().apiKeys;
     if (!apiKeys[fnConfig.provider]) {
       toast.error('請先在設定中填入 API Key');
@@ -177,7 +177,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         { role: 'system' as const, content: fnConfig.prompt },
         { role: 'user' as const, content: body },
       ];
-      const response = await trackedCallFunction(fnConfig, apiKeys, messages, undefined, 'source_formatting');
+      const response = await trackedCallFunction(fnConfig, apiKeys, messages, undefined, 'translation_formatting');
       const result = frontmatterBlock
         ? frontmatterBlock + '\n\n' + response.content.trim() + '\n'
         : response.content.trim() + '\n';
@@ -200,11 +200,9 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       end: selectedRange.end,
       originalPreview: content,
     });
-    // Send selected text to translation area and clear messages
-    store.setOriginalText(selectedRange.text);
-    useTranslatorStore.setState({ messages: [] });
+    // Send as a follow-up retranslation request — keep originalText & messages intact
+    store.sendMessage(`請重新翻譯以下段落：\n\n${selectedRange.text}`);
     setSelectedRange(null);
-    toast.info('已將選取段落送至翻譯區，請輸入指令後翻譯');
   }, [content, selectedRange]);
 
   const handleKeyDown = useCallback(

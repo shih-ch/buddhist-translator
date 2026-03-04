@@ -4,7 +4,7 @@ import type { ChatMessage } from '@/types/chat';
 import type { AIProviderId, TranslationParams } from '@/types/settings';
 import { assembleMarkdown } from '@/services/markdownUtils';
 import { callFunction } from '@/services/ai/router';
-import { buildTranslationMessages } from '@/services/ai/promptBuilder';
+import { buildTranslationMessages, buildRetranslationMessages } from '@/services/ai/promptBuilder';
 import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useGlossaryStore } from '@/stores/glossaryStore';
@@ -342,13 +342,24 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
       // For follow-up messages, just pass the conversation history
       let messages: AIMessage[];
       if (state.messages.length === 0) {
-        messages = buildTranslationMessages(
-          fnConfig.prompt,
-          textForTranslation,
-          state.translationParams,
-          glossaryTerms,
-          []
-        );
+        if (state.replacementRange) {
+          // Retranslation mode without prior messages: include full original as context
+          messages = buildRetranslationMessages(
+            fnConfig.prompt,
+            state.originalText,
+            textForTranslation,
+            state.translationParams,
+            glossaryTerms,
+          );
+        } else {
+          messages = buildTranslationMessages(
+            fnConfig.prompt,
+            textForTranslation,
+            state.translationParams,
+            glossaryTerms,
+            []
+          );
+        }
       } else {
         // Follow-up: system prompt + full history
         messages = buildTranslationMessages(
@@ -441,9 +452,20 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     // Partial replacement mode: splice result into existing previewContent
     if (state.replacementRange) {
       const { start, end, originalPreview } = state.replacementRange;
+      // Auto-save a version before replacement so the user can undo
+      const versionId = `ver-${Date.now()}`;
+      const versions = [...state.savedVersions, {
+        id: versionId,
+        name: `替換前自動備份`,
+        content: originalPreview,
+        model: state.currentModel.model,
+        provider: state.currentModel.provider,
+        timestamp: Date.now(),
+      }];
+      persistVersions(versions);
       const newContent = originalPreview.slice(0, start) + msg.content.trim() + originalPreview.slice(end);
-      set({ previewContent: newContent, replacementRange: null });
-      toast.success('已替換選取段落');
+      set({ previewContent: newContent, replacementRange: null, savedVersions: versions });
+      toast.success('已替換選取段落（已自動備份替換前版本）');
       return;
     }
 
