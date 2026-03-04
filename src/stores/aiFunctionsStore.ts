@@ -8,6 +8,7 @@ import {
   DEFAULT_DICTIONARY_LOOKUP_PROMPT,
   DEFAULT_GLOSSARY_FILL_PROMPT,
   DEFAULT_SOURCE_FORMATTING_PROMPT,
+  DEFAULT_TRANSLATION_FORMATTING_PROMPT,
 } from './defaultPrompts'
 import { usePromptHistoryStore } from './promptHistoryStore'
 
@@ -56,6 +57,15 @@ const DEFAULT_FUNCTIONS: AIFunctionConfig[] = [
     model: 'gpt-4.1-mini',
     prompt: DEFAULT_SOURCE_FORMATTING_PROMPT,
     defaultPrompt: DEFAULT_SOURCE_FORMATTING_PROMPT,
+  },
+  {
+    id: 'translation_formatting',
+    name: '譯文排版',
+    description: '用 AI 整理翻譯稿的 Markdown 格式與段落結構',
+    provider: 'openai',
+    model: 'gpt-4.1-mini',
+    prompt: DEFAULT_TRANSLATION_FORMATTING_PROMPT,
+    defaultPrompt: DEFAULT_TRANSLATION_FORMATTING_PROMPT,
   },
   {
     id: 'dictionary_lookup',
