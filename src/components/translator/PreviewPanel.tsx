@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Download, Copy, Github, FileText, FileCode, Check, Loader2, FileType, FileSpreadsheet, Columns2, BookCheck, GitCompare, Bookmark, History, Sparkles } from 'lucide-react';
+import { Download, Copy, Github, FileText, FileCode, Check, Loader2, FileType, FileSpreadsheet, Columns2, BookCheck, GitCompare, Bookmark, History, Sparkles, BookMarked } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -15,13 +15,22 @@ import { VersionCompare } from './VersionCompare';
 import { VersionManager } from './VersionManager';
 import { ImageUploader } from './ImageUploader';
 import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
+import { useGlossaryStore } from '@/stores/glossaryStore';
 import { trackedCallFunction } from '@/services/ai/trackedCall';
+import { annotateGlossaryTerms } from '@/services/glossaryAnnotator';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { renderToString } from 'react-dom/server';
 import React from 'react';
 import { exportPDF, exportDOCX } from '@/services/exportFormats';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import type { AnnotationMode } from '@/services/glossaryAnnotator';
 
 export function PreviewPanel() {
   const previewContent = useTranslatorStore((s) => s.previewContent);
@@ -116,9 +125,29 @@ ${htmlContent}
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleAnnotateTerms = useCallback((mode: AnnotationMode) => {
+    if (!previewContent) return;
+    const terms = useGlossaryStore.getState().glossary?.terms;
+    if (!terms || terms.length === 0) {
+      toast.error('術語表為空，請先載入術語表');
+      return;
+    }
+    // Separate frontmatter from body
+    const fmMatch = previewContent.match(/^(---\n[\s\S]*?\n---)\n*/);
+    const frontmatterBlock = fmMatch ? fmMatch[1] : '';
+    const body = fmMatch ? previewContent.slice(fmMatch[0].length) : previewContent;
+
+    const { text, count } = annotateGlossaryTerms(body, terms, mode);
+    const result = frontmatterBlock
+      ? frontmatterBlock + '\n\n' + text
+      : text;
+    setPreviewContent(result);
+    toast.success(`已標注 ${count} 個術語`);
+  }, [previewContent, setPreviewContent]);
+
   const handleAIFormat = useCallback(async () => {
     if (!previewContent) return;
-    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('source_formatting');
+    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('translation_formatting');
     const apiKeys = useSettingsStore.getState().apiKeys;
     if (!apiKeys[fnConfig.provider]) {
       toast.error('請先在設定中填入 API Key');
@@ -135,7 +164,7 @@ ${htmlContent}
         { role: 'system' as const, content: fnConfig.prompt },
         { role: 'user' as const, content: body },
       ];
-      const response = await trackedCallFunction(fnConfig, apiKeys, messages, undefined, 'source_formatting');
+      const response = await trackedCallFunction(fnConfig, apiKeys, messages, undefined, 'translation_formatting');
       const result = frontmatterBlock
         ? frontmatterBlock + '\n\n' + response.content.trim() + '\n'
         : response.content.trim() + '\n';
@@ -216,6 +245,28 @@ ${htmlContent}
               >
                 {formatting ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
               </Button>
+            )}
+            {previewContent && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs px-2"
+                    title="術語標注"
+                  >
+                    <BookMarked className="size-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleAnnotateTerms('abbr')}>
+                    {'<abbr>'} 標注
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleAnnotateTerms('link')}>
+                    [連結] 標注
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             {originalText && previewContent && (
               <Button

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { AIProviderId } from '@/types/settings'
+import type { AnnotationMode } from '@/services/glossaryAnnotator'
 
 const KEYS = {
   apiKeys: 'bt-apikeys',
@@ -18,6 +19,7 @@ interface ApiKeys {
 
 interface Preferences {
   lastPreset: string
+  annotationMode: AnnotationMode
 }
 
 interface SettingsState {
@@ -61,7 +63,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   githubToken: localStorage.getItem(KEYS.githubToken) ?? '',
   githubRepo: localStorage.getItem(KEYS.githubRepo) ?? 'shih-ch/mantra',
   githubBranch: localStorage.getItem(KEYS.githubBranch) ?? 'main',
-  preferences: loadJson<Preferences>(KEYS.preferences, { lastPreset: '' }),
+  preferences: loadJson<Preferences>(KEYS.preferences, { lastPreset: '', annotationMode: 'abbr' }),
 
   getApiKey: (provider) => get().apiKeys[provider],
 
