@@ -33,7 +33,19 @@ export async function exportPDF(
     margin: [10, 10, 10, 10] as [number, number, number, number],
     filename,
     image: { type: 'jpeg' as const, quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      onclone: (clonedDoc: Document) => {
+        // Tailwind v4 uses oklch() which html2canvas cannot parse.
+        // Replace oklch(...) with transparent in all <style> elements of the clone.
+        clonedDoc.querySelectorAll('style').forEach((style) => {
+          if (style.textContent && style.textContent.includes('oklch')) {
+            style.textContent = style.textContent.replace(/oklch\([^)]*\)/g, 'transparent')
+          }
+        })
+      },
+    },
     jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
     pagebreak: { mode: ['avoid-all', 'css', 'legacy'] as string[] },
   }
