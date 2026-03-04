@@ -2,34 +2,14 @@ import { create } from 'zustand';
 import type { ArticleFrontmatter, Article } from '@/types/article';
 import type { ChatMessage } from '@/types/chat';
 import type { AIProviderId, TranslationParams } from '@/types/settings';
+import type { ArticleImage, SavedVersion } from '@/types/translator';
 import { assembleMarkdown } from '@/services/markdownUtils';
-import { callFunction } from '@/services/ai/router';
-import { buildTranslationMessages, buildRetranslationMessages } from '@/services/ai/promptBuilder';
-import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
-import { useSettingsStore } from '@/stores/settingsStore';
-import { useGlossaryStore } from '@/stores/glossaryStore';
-import type { AIMessage } from '@/services/ai/types';
-import { AI_PROVIDERS, DEFAULT_TRANSLATION_MODEL } from '@/stores/aiModels';
-import { logTranslation } from '@/services/translationLogger';
-import { useCostTrackingStore } from '@/stores/costTrackingStore';
-import { useTranslationMemoryStore } from '@/stores/translationMemoryStore';
+import { DEFAULT_TRANSLATION_MODEL } from '@/stores/aiModels';
+import { performSendMessage, genId } from './actions/sendMessage';
+import { performAdoptVersion } from './actions/adoptVersion';
 import { toast } from 'sonner';
 
-export interface ArticleImage {
-  name: string;
-  url: string;
-  path: string;
-  sha: string;
-}
-
-export interface SavedVersion {
-  id: string;
-  name: string;
-  content: string;
-  model: string;
-  provider: string;
-  timestamp: number;
-}
+export type { ArticleImage, SavedVersion } from '@/types/translator';
 
 const VERSIONS_KEY_PREFIX = 'bt-saved-versions';
 
@@ -40,7 +20,7 @@ function loadVersions(): SavedVersion[] {
   } catch { return []; }
 }
 
-function persistVersions(versions: SavedVersion[]): boolean {
+export function persistVersions(versions: SavedVersion[]): boolean {
   try {
     localStorage.setItem(VERSIONS_KEY_PREFIX, JSON.stringify(versions));
     return true;
@@ -71,7 +51,7 @@ const DEFAULT_FRONTMATTER: ArticleFrontmatter = {
   tags: [],
 };
 
-interface TranslatorState {
+export interface TranslatorState {
   // Input
   inputMode: 'paste' | 'url' | 'import' | 'cbeta';
   originalText: string;
@@ -131,71 +111,6 @@ interface TranslatorState {
   deleteVersion: (index: number) => void;
 }
 
-let messageCounter = 0;
-function genId() {
-  return `msg-${++messageCounter}-${Date.now()}`;
-}
-
-/** Use AI to extract metadata (title, author) from translated content */
-async function extractMetadataFromContent(
-  content: string,
-  originalText: string,
-  provider: AIProviderId,
-  model: string,
-  fields: { title: boolean; author: boolean },
-): Promise<{ title?: string; author?: string }> {
-  try {
-    const apiKeys = useSettingsStore.getState().apiKeys;
-    if (!apiKeys[provider]) return {};
-
-    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('translation');
-
-    const requests: string[] = [];
-    if (fields.title) requests.push('title: 根據內容生成一個簡潔的繁體中文標題');
-    if (fields.author) requests.push('author: 從原文或譯文中找出文章作者姓名（保留原文語言）');
-
-    const messages: AIMessage[] = [
-      {
-        role: 'system',
-        content: `你是佛學文章元資料提取器。請從以下內容中提取資訊。
-以 JSON 格式回覆，只包含以下欄位：
-${requests.join('\n')}
-
-只回覆 JSON，不要加其他說明。例如：{"title": "標題", "author": "作者"}`,
-      },
-      {
-        role: 'user',
-        content: `【譯文】\n${content.slice(0, 1500)}\n\n【原文】\n${originalText.slice(0, 1500)}`,
-      },
-    ];
-
-    const response = await callFunction(
-      { ...fnConfig, provider, model },
-      apiKeys,
-      messages,
-      { overrideProvider: provider, overrideModel: model },
-    );
-
-    // Parse JSON from response (handle markdown code blocks)
-    let text = response.content.trim();
-    const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (codeBlock) text = codeBlock[1].trim();
-
-    const parsed = JSON.parse(text);
-    const result: { title?: string; author?: string } = {};
-    if (fields.title && parsed.title) {
-      result.title = String(parsed.title).replace(/^["「『]|["」』]$/g, '');
-    }
-    if (fields.author && parsed.author) {
-      result.author = String(parsed.author).trim();
-    }
-    return result;
-  } catch (err) {
-    console.error('[extractMetadata] error:', err);
-    return {};
-  }
-}
-
 export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   // Initial state
   inputMode: 'paste',
@@ -218,9 +133,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   replacementRange: null,
 
   setInputMode: (mode) => set({ inputMode: mode }),
-
   setOriginalText: (text) => set({ originalText: text }),
-
   setImportedText: (text) => set({ importedText: text }),
 
   updateMetadata: (updates) =>
@@ -243,313 +156,10 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   setCurrentModel: (provider, model) =>
     set({ currentModel: { provider, model } }),
 
-  sendMessage: async (content: string) => {
-    const state = get();
-    if (state.isLoading) return;
-
-    // Check API key before proceeding
-    const apiKeys = useSettingsStore.getState().apiKeys;
-    const provider = state.currentModel.provider;
-    if (!apiKeys[provider]) {
-      const providerNames: Record<string, string> = {
-        openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', perplexity: 'Perplexity',
-      };
-      throw new Error(`請先在設定中填入 ${providerNames[provider] ?? provider} API Key`);
-    }
-
-    const abortController = new AbortController();
-
-    // Add user message
-    const userMsg: ChatMessage = {
-      id: genId(),
-      role: 'user',
-      content,
-      timestamp: Date.now(),
-    };
-
-    // Create placeholder assistant message for streaming
-    const assistantMsg: ChatMessage = {
-      id: genId(),
-      role: 'assistant',
-      content: '',
-      timestamp: Date.now(),
-      model: state.currentModel.model,
-      provider: state.currentModel.provider,
-    };
-
-    set((s) => ({
-      messages: [...s.messages, userMsg, assistantMsg],
-      isLoading: true,
-      abortController,
-    }));
-
-    try {
-      // Build messages using promptBuilder
-      const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('translation');
-      const glossaryTerms = useGlossaryStore.getState().glossary?.terms ?? [];
-
-      // ── Relay translation: first translate to intermediate language ──
-      const relay = state.translationParams.relayLanguage;
-      let textForTranslation = content;
-      if (relay && relay !== 'none' && state.messages.length === 0) {
-        const relayLangName = relay === 'en' ? 'English' : 'Russian';
-        const relayMessages: AIMessage[] = [
-          {
-            role: 'system',
-            content: `You are a professional translator. Translate the following text into ${relayLangName}. Preserve all formatting, paragraph breaks, and structure. Output only the translation.`,
-          },
-          { role: 'user', content },
-        ];
-
-        // Update UI to show relay progress
-        set((s) => {
-          const msgs = [...s.messages];
-          const last = msgs[msgs.length - 1];
-          if (last.id === assistantMsg.id) {
-            msgs[msgs.length - 1] = { ...last, content: `⏳ 中轉翻譯中（→ ${relayLangName}）...\n\n` };
-          }
-          return { messages: msgs };
-        });
-
-        const relayResponse = await callFunction(
-          fnConfig,
-          apiKeys,
-          relayMessages,
-          {
-            overrideProvider: state.currentModel.provider,
-            overrideModel: state.currentModel.model,
-          }
-        );
-        textForTranslation = relayResponse.content;
-
-        // Clear the progress message for the real translation
-        set((s) => {
-          const msgs = [...s.messages];
-          const last = msgs[msgs.length - 1];
-          if (last.id === assistantMsg.id) {
-            msgs[msgs.length - 1] = { ...last, content: '' };
-          }
-          return { messages: msgs };
-        });
-      }
-
-      // Build chat history for translation context
-      const chatHistory: AIMessage[] = state.messages.map((m) => ({
-        role: m.role as 'user' | 'assistant' | 'system',
-        content: m.content,
-      }));
-      // Add current user message to history
-      chatHistory.push({ role: 'user', content });
-
-      // For the first message, use the full translation prompt builder
-      // For follow-up messages, just pass the conversation history
-      let messages: AIMessage[];
-      if (state.messages.length === 0) {
-        if (state.replacementRange) {
-          // Retranslation mode without prior messages: include full original as context
-          messages = buildRetranslationMessages(
-            fnConfig.prompt,
-            state.originalText,
-            textForTranslation,
-            state.translationParams,
-            glossaryTerms,
-          );
-        } else {
-          messages = buildTranslationMessages(
-            fnConfig.prompt,
-            textForTranslation,
-            state.translationParams,
-            glossaryTerms,
-            []
-          );
-        }
-      } else {
-        // Follow-up: system prompt + full history
-        messages = buildTranslationMessages(
-          fnConfig.prompt,
-          state.originalText,
-          state.translationParams,
-          glossaryTerms,
-          chatHistory
-        );
-      }
-
-      // Calculate cost using actual model prices
-      const providerModels = AI_PROVIDERS[state.currentModel.provider];
-      const modelInfo = providerModels?.models.find((m) => m.id === state.currentModel.model);
-      const inputPrice = modelInfo?.inputPrice ?? 2.5;
-      const outputPrice = modelInfo?.outputPrice ?? 10;
-
-      const response = await callFunction(
-        fnConfig,
-        apiKeys,
-        messages,
-        {
-          overrideProvider: state.currentModel.provider,
-          overrideModel: state.currentModel.model,
-          signal: abortController.signal,
-          stream: {
-            onChunk: (chunk) => {
-              set((s) => {
-                const msgs = [...s.messages];
-                const last = msgs[msgs.length - 1];
-                if (last.id === assistantMsg.id) {
-                  msgs[msgs.length - 1] = { ...last, content: last.content + chunk };
-                }
-                return { messages: msgs };
-              });
-            },
-            onDone: () => {},
-            onError: () => {},
-          },
-        }
-      );
-
-      // Update final message with usage info
-      const callCost = (response.usage.prompt_tokens * inputPrice +
-        response.usage.completion_tokens * outputPrice) / 1_000_000;
-
-      // Record in persistent cost tracking
-      useCostTrackingStore.getState().addEntry({
-        provider: state.currentModel.provider,
-        model: state.currentModel.model,
-        functionType: 'translation',
-        inputTokens: response.usage.prompt_tokens,
-        outputTokens: response.usage.completion_tokens,
-        cost: callCost,
-      });
-
-      set((s) => {
-        const msgs = [...s.messages];
-        const last = msgs[msgs.length - 1];
-        if (last.id === assistantMsg.id) {
-          msgs[msgs.length - 1] = { ...last, content: response.content };
-        }
-        return {
-          messages: msgs,
-          isLoading: false,
-          abortController: null,
-          totalTokens: s.totalTokens + response.usage.total_tokens,
-          totalCost: s.totalCost + callCost,
-        };
-      });
-    } catch (err) {
-      console.error('[sendMessage] API call error:', err);
-      // Add error message to chat
-      set((s) => {
-        const msgs = [...s.messages];
-        const last = msgs[msgs.length - 1];
-        if (last.id === assistantMsg.id) {
-          const errorText = err instanceof Error ? err.message : 'Unknown error';
-          msgs[msgs.length - 1] = { ...last, content: `**Error:** ${errorText}` };
-        }
-        return { messages: msgs, isLoading: false, abortController: null };
-      });
-    }
-  },
-
-  adoptVersion: (messageId: string) => {
-    const state = get();
-    const msg = state.messages.find((m) => m.id === messageId);
-    if (!msg) return;
-
-    // Partial replacement mode: splice result into existing previewContent
-    if (state.replacementRange) {
-      const { start, end, originalPreview } = state.replacementRange;
-      // Auto-save a version before replacement so the user can undo
-      const versionId = `ver-${Date.now()}`;
-      const versions = [...state.savedVersions, {
-        id: versionId,
-        name: `替換前自動備份`,
-        content: originalPreview,
-        model: state.currentModel.model,
-        provider: state.currentModel.provider,
-        timestamp: Date.now(),
-      }];
-      persistVersions(versions);
-      const newContent = originalPreview.slice(0, start) + msg.content.trim() + originalPreview.slice(end);
-      set({ previewContent: newContent, replacementRange: null, savedVersions: versions });
-      toast.success('已替換選取段落（已自動備份替換前版本）');
-      return;
-    }
-
-    // Set translator_model from the message's actual model (or current model)
-    const actualModel = msg.model || state.currentModel.model;
-    const metadata = { ...state.metadata, translator_model: actualModel };
-    set({ metadata });
-
-    // First, assemble with updated metadata
-    const images = state.articleImages.length > 0 ? state.articleImages : undefined;
-    const md = assembleMarkdown(metadata, msg.content, state.originalText || undefined, images);
-    set({ previewContent: md });
-
-    // Save to translation memory
-    if (state.originalText) {
-      useTranslationMemoryStore.getState().addEntry(
-        state.originalText,
-        msg.content,
-        state.metadata.original_language,
-        state.editingArticle?.path ?? '',
-      );
-    }
-
-    // If title or author is empty, ask AI to extract from content
-    const needTitle = !metadata.title.trim();
-    const needAuthor = !metadata.author.trim();
-    if (needTitle || needAuthor) {
-      extractMetadataFromContent(
-        msg.content,
-        state.originalText,
-        state.currentModel.provider,
-        state.currentModel.model,
-        { title: needTitle, author: needAuthor },
-      ).then((extracted) => {
-        // Guard: if store was reset while extraction was in-flight, skip
-        if (get().messages.length === 0) return;
-        if (extracted.title || extracted.author) {
-          const updated = {
-            ...get().metadata,
-            ...(extracted.title ? { title: extracted.title } : {}),
-            ...(extracted.author ? { author: extracted.author } : {}),
-          };
-          set({ metadata: updated });
-          const imgs = get().articleImages.length > 0 ? get().articleImages : undefined;
-          const newMd = assembleMarkdown(updated, msg.content, get().originalText || undefined, imgs);
-          set({ previewContent: newMd });
-          const parts: string[] = [];
-          if (extracted.title) parts.push(`標題：${extracted.title}`);
-          if (extracted.author) parts.push(`作者：${extracted.author}`);
-          toast.success(`已自動提取 ${parts.join('、')}`);
-        } else {
-          toast.info('無法從內容中提取標題/作者，請手動填寫');
-        }
-      }).catch((err) => {
-        console.error('[extractMetadata] failed:', err);
-        toast.error(`提取標題/作者失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
-      });
-    }
-
-    // Log translation session to GitHub (fire-and-forget)
-    const userMessages = state.messages.filter((m) => m.role === 'user');
-    const corrections = userMessages.slice(1).map((m) => ({
-      type: 'other' as const,
-      instruction: m.content,
-    }));
-    const slug = state.metadata.title || state.metadata.date;
-    logTranslation({
-      date: new Date().toISOString().split('T')[0],
-      article: slug,
-      function: 'translation',
-      provider: state.currentModel.provider,
-      model: state.currentModel.model,
-      params: state.translationParams as unknown as Record<string, unknown>,
-      rounds: userMessages.length,
-      corrections,
-    }).catch(() => { /* non-blocking */ });
-  },
+  sendMessage: (content) => performSendMessage(content, get, set),
+  adoptVersion: (messageId) => performAdoptVersion(messageId, get, set),
 
   setPreviewContent: (content) => set({ previewContent: content }),
-
   setPreviewMode: (mode) => set({ previewMode: mode }),
 
   addArticleImage: (img) =>
@@ -559,7 +169,6 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     set((state) => ({ articleImages: state.articleImages.filter((i) => i.path !== path) })),
 
   loadArticleForEdit: (article) => {
-    // Create synthetic chat messages so user sees the original conversation
     const syntheticMessages: ChatMessage[] = [];
     if (article.originalText) {
       syntheticMessages.push({
