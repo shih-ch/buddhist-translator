@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -15,11 +15,19 @@ import {
   Table,
   Undo2,
   Redo2,
+  Sparkles,
+  Languages,
+  Loader2,
 } from 'lucide-react';
+import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { trackedCallFunction } from '@/services/ai/trackedCall';
+import { toast } from 'sonner';
 
 interface MarkdownEditorProps {
   content: string;
   onChange: (content: string) => void;
+  originalText?: string;
 }
 
 type InsertAction = {
@@ -55,12 +63,15 @@ const TOOLBAR_ITEMS: { icon: React.ElementType; label: string; action: InsertAct
   },
 ];
 
-export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
+export function MarkdownEditor({ content, onChange, originalText }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const historyRef = useRef<{ stack: string[]; index: number }>({
     stack: [content],
     index: 0,
   });
+  const [selectedRange, setSelectedRange] = useState<{ start: number; end: number; text: string } | null>(null);
+  const [formatting, setFormatting] = useState(false);
+  const [retranslating, setRetranslating] = useState(false);
 
   const pushHistory = useCallback((newContent: string) => {
     const h = historyRef.current;
@@ -137,6 +148,79 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     }
   }, [onChange]);
 
+  const handleSelect = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    if (start !== end) {
+      setSelectedRange({ start, end, text: content.slice(start, end) });
+    } else {
+      setSelectedRange(null);
+    }
+  }, [content]);
+
+  const handleAIFormat = useCallback(async () => {
+    if (!content) return;
+    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('source_formatting');
+    const apiKeys = useSettingsStore.getState().apiKeys;
+    if (!apiKeys[fnConfig.provider]) {
+      toast.error('請先在設定中填入 API Key');
+      return;
+    }
+    setFormatting(true);
+    try {
+      const fmMatch = content.match(/^(---\n[\s\S]*?\n---)\n*/);
+      const frontmatterBlock = fmMatch ? fmMatch[1] : '';
+      const body = fmMatch ? content.slice(fmMatch[0].length) : content;
+
+      const messages = [
+        { role: 'system' as const, content: fnConfig.prompt },
+        { role: 'user' as const, content: body },
+      ];
+      const response = await trackedCallFunction(fnConfig, apiKeys, messages, undefined, 'source_formatting');
+      const result = frontmatterBlock
+        ? frontmatterBlock + '\n\n' + response.content.trim() + '\n'
+        : response.content.trim() + '\n';
+      pushHistory(result);
+      onChange(result);
+      toast.success('AI 排版完成');
+    } catch (err) {
+      toast.error(`排版失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setFormatting(false);
+    }
+  }, [content, onChange, pushHistory]);
+
+  const handleRetranslate = useCallback(async () => {
+    if (!selectedRange) return;
+    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('translation');
+    const apiKeys = useSettingsStore.getState().apiKeys;
+    if (!apiKeys[fnConfig.provider]) {
+      toast.error('請先在設定中填入 API Key');
+      return;
+    }
+    setRetranslating(true);
+    try {
+      const contextText = originalText ? `\n\n【原文參考】\n${originalText.slice(0, 3000)}` : '';
+      const systemPrompt = `${fnConfig.prompt}\n\n---\n以下是需要重新翻譯的段落，請重新翻譯為繁體中文。\n只輸出翻譯結果，不加任何說明或標記。${contextText}`;
+      const messages = [
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'user' as const, content: selectedRange.text },
+      ];
+      const response = await trackedCallFunction(fnConfig, apiKeys, messages, undefined, 'translation');
+      const newContent = content.slice(0, selectedRange.start) + response.content.trim() + content.slice(selectedRange.end);
+      pushHistory(newContent);
+      onChange(newContent);
+      setSelectedRange(null);
+      toast.success('重新翻譯完成');
+    } catch (err) {
+      toast.error(`重新翻譯失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setRetranslating(false);
+    }
+  }, [content, onChange, pushHistory, selectedRange, originalText]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       // Ctrl+Z / Ctrl+Shift+Z for undo/redo
@@ -207,6 +291,27 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         >
           <Redo2 className="h-3.5 w-3.5" />
         </Button>
+        <div className="mx-1 h-4 w-px bg-border" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title="AI 排版"
+          onClick={handleAIFormat}
+          disabled={formatting || !content}
+        >
+          {formatting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title="重新翻譯選取段落"
+          onClick={handleRetranslate}
+          disabled={retranslating || !selectedRange}
+        >
+          {retranslating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />}
+        </Button>
       </div>
 
       {/* Editor */}
@@ -215,6 +320,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         value={content}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onSelect={handleSelect}
         placeholder="Markdown 原始碼..."
         className="min-h-0 flex-1 resize-none rounded-none border-0 font-mono text-xs leading-relaxed focus-visible:ring-0"
       />

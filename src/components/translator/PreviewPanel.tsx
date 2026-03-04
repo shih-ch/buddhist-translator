@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Download, Copy, Github, FileText, FileCode, Check, Loader2, FileType, FileSpreadsheet, Columns2, BookCheck, GitCompare, Bookmark, History } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Download, Copy, Github, FileText, FileCode, Check, Loader2, FileType, FileSpreadsheet, Columns2, BookCheck, GitCompare, Bookmark, History, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -14,6 +14,8 @@ import { ConsistencyReport } from './ConsistencyReport';
 import { VersionCompare } from './VersionCompare';
 import { VersionManager } from './VersionManager';
 import { ImageUploader } from './ImageUploader';
+import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
+import { trackedCallFunction } from '@/services/ai/trackedCall';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -34,6 +36,7 @@ export function PreviewPanel() {
   const [showConsistency, setShowConsistency] = useState(false);
   const [showVersionCompare, setShowVersionCompare] = useState(false);
   const [showVersionManager, setShowVersionManager] = useState(false);
+  const [formatting, setFormatting] = useState(false);
   const githubToken = useSettingsStore((s) => s.githubToken);
   const editingArticle = useTranslatorStore((s) => s.editingArticle);
   const originalText = useTranslatorStore((s) => s.originalText);
@@ -113,6 +116,38 @@ ${htmlContent}
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleAIFormat = useCallback(async () => {
+    if (!previewContent) return;
+    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('source_formatting');
+    const apiKeys = useSettingsStore.getState().apiKeys;
+    if (!apiKeys[fnConfig.provider]) {
+      toast.error('請先在設定中填入 API Key');
+      return;
+    }
+    setFormatting(true);
+    try {
+      // Separate frontmatter from body
+      const fmMatch = previewContent.match(/^(---\n[\s\S]*?\n---)\n*/);
+      const frontmatterBlock = fmMatch ? fmMatch[1] : '';
+      const body = fmMatch ? previewContent.slice(fmMatch[0].length) : previewContent;
+
+      const messages = [
+        { role: 'system' as const, content: fnConfig.prompt },
+        { role: 'user' as const, content: body },
+      ];
+      const response = await trackedCallFunction(fnConfig, apiKeys, messages, undefined, 'source_formatting');
+      const result = frontmatterBlock
+        ? frontmatterBlock + '\n\n' + response.content.trim() + '\n'
+        : response.content.trim() + '\n';
+      setPreviewContent(result);
+      toast.success('AI 排版完成');
+    } catch (err) {
+      toast.error(`排版失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setFormatting(false);
+    }
+  }, [previewContent, setPreviewContent]);
+
   const handleSaveToGithub = async () => {
     console.log('[Save] previewContent length:', previewContent.length, 'githubToken:', !!githubToken);
     if (!previewContent || !githubToken) {
@@ -170,6 +205,18 @@ ${htmlContent}
             </TabsTrigger>
           </TabsList>
           <div className="flex gap-1">
+            {previewContent && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs px-2"
+                onClick={handleAIFormat}
+                disabled={formatting}
+                title="AI 排版"
+              >
+                {formatting ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+              </Button>
+            )}
             {originalText && previewContent && (
               <Button
                 variant={showParallel ? 'secondary' : 'ghost'}
@@ -249,6 +296,7 @@ ${htmlContent}
               <MarkdownEditor
                 content={previewContent}
                 onChange={setPreviewContent}
+                originalText={originalText}
               />
             </TabsContent>
           </>
