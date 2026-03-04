@@ -10,19 +10,17 @@ import { TermExtractor } from './TermExtractor';
 import { ShortcutPicker } from './ShortcutPicker';
 
 export function ChatPanel() {
-  const {
-    messages,
-    isLoading,
-    originalText,
-    importedText,
-    inputMode,
-    sendMessage,
-    adoptVersion,
-    stopGeneration,
-    reset,
-    replacementRange,
-    setReplacementRange,
-  } = useTranslatorStore();
+  const messages = useTranslatorStore((s) => s.messages);
+  const isLoading = useTranslatorStore((s) => s.isLoading);
+  const originalText = useTranslatorStore((s) => s.originalText);
+  const importedText = useTranslatorStore((s) => s.importedText);
+  const inputMode = useTranslatorStore((s) => s.inputMode);
+  const sendMessage = useTranslatorStore((s) => s.sendMessage);
+  const adoptVersion = useTranslatorStore((s) => s.adoptVersion);
+  const stopGeneration = useTranslatorStore((s) => s.stopGeneration);
+  const reset = useTranslatorStore((s) => s.reset);
+  const replacementRange = useTranslatorStore((s) => s.replacementRange);
+  const setReplacementRange = useTranslatorStore((s) => s.setReplacementRange);
   const [input, setInput] = useState('');
   const [showTermExtractor, setShowTermExtractor] = useState(false);
   const [adoptedMessageId, setAdoptedMessageId] = useState<string | null>(null);

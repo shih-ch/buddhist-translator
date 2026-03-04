@@ -7,9 +7,6 @@ import { generateSlug, parseMarkdown } from '@/services/markdownUtils';
 import { githubService } from '@/services/github';
 import { ImageUploader } from './ImageUploader';
 import { toast } from 'sonner';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { renderToString } from 'react-dom/server';
 import React from 'react';
 import { exportPDF, exportDOCX } from '@/services/exportFormats';
 
@@ -42,8 +39,11 @@ export function ExportBar() {
     toast.success(`已下載 ${filename}`);
   };
 
-  const handleDownloadHtml = () => {
+  const handleDownloadHtml = async () => {
     if (!previewContent) return;
+    const ReactMarkdown = (await import('react-markdown')).default;
+    const remarkGfm = (await import('remark-gfm')).default;
+    const { renderToString } = await import('react-dom/server');
     const htmlContent = renderToString(
       React.createElement(ReactMarkdown, { remarkPlugins: [remarkGfm] }, previewContent)
     );
@@ -76,6 +76,9 @@ ${htmlContent}
   const handleDownloadPdf = async () => {
     if (!previewContent) return;
     try {
+      const ReactMarkdown = (await import('react-markdown')).default;
+      const remarkGfm = (await import('remark-gfm')).default;
+      const { renderToString } = await import('react-dom/server');
       const htmlContent = renderToString(
         React.createElement(ReactMarkdown, { remarkPlugins: [remarkGfm] }, previewContent)
       );

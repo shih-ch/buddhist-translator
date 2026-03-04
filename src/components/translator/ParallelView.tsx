@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useMemo } from 'react'
 
 interface ParallelViewProps {
   originalText: string
@@ -43,8 +43,8 @@ export function ParallelView({ originalText, translatedContent }: ParallelViewPr
     requestAnimationFrame(() => { syncing.current = false })
   }, [])
 
-  const origParas = toParagraphs(originalText)
-  const transParas = toParagraphs(translatedContent, true)
+  const origParas = useMemo(() => toParagraphs(originalText), [originalText])
+  const transParas = useMemo(() => toParagraphs(translatedContent, true), [translatedContent])
   const maxLen = Math.max(origParas.length, transParas.length)
 
   return (

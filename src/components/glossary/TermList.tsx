@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Pencil, Trash2, ExternalLink, Link as LinkIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -58,12 +58,12 @@ export function TermList({ terms, onEdit, onDelete, onDeleteBatch }: TermListPro
     }
   }
 
-  const sorted = [...terms].sort((a, b) => {
+  const sorted = useMemo(() => [...terms].sort((a, b) => {
     const av = (a[sortKey] as string) || ''
     const bv = (b[sortKey] as string) || ''
     const cmp = av.localeCompare(bv)
     return sortAsc ? cmp : -cmp
-  })
+  }), [terms, sortKey, sortAsc])
 
   const virtualizer = useVirtualizer({
     count: sorted.length,

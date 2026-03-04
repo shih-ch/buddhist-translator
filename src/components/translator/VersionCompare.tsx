@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -39,12 +39,12 @@ export function VersionCompare({ open, onClose }: VersionCompareProps) {
     }
   }
 
-  const stats = diff
+  const stats = useMemo(() => diff
     ? {
         added: diff.filter((d) => d.type === 'add').length,
         removed: diff.filter((d) => d.type === 'remove').length,
       }
-    : null
+    : null, [diff])
 
   return (
     <Dialog
