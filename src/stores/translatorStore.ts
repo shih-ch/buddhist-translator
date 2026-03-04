@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create, type StoreApi } from 'zustand';
 import type { ArticleFrontmatter, Article } from '@/types/article';
 import type { ChatMessage } from '@/types/chat';
 import type { AIProviderId, TranslationParams } from '@/types/settings';
@@ -7,27 +7,10 @@ import { assembleMarkdown } from '@/services/markdownUtils';
 import { DEFAULT_TRANSLATION_MODEL } from '@/stores/aiModels';
 import { performSendMessage, genId } from './actions/sendMessage';
 import { performAdoptVersion } from './actions/adoptVersion';
+import { loadVersions, persistVersions } from './actions/versionStorage';
 import { toast } from 'sonner';
 
 export type { ArticleImage, SavedVersion } from '@/types/translator';
-
-const VERSIONS_KEY_PREFIX = 'bt-saved-versions';
-
-function loadVersions(): SavedVersion[] {
-  try {
-    const raw = localStorage.getItem(VERSIONS_KEY_PREFIX);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-export function persistVersions(versions: SavedVersion[]): boolean {
-  try {
-    localStorage.setItem(VERSIONS_KEY_PREFIX, JSON.stringify(versions));
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 const DEFAULT_PARAMS: TranslationParams = {
   keepOriginalPerLine: true,
@@ -110,6 +93,9 @@ export interface TranslatorState {
   loadVersion: (index: number) => void;
   deleteVersion: (index: number) => void;
 }
+
+export type TranslatorStoreGet = StoreApi<TranslatorState>['getState'];
+export type TranslatorStoreSet = StoreApi<TranslatorState>['setState'];
 
 export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   // Initial state

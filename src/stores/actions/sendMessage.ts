@@ -1,5 +1,4 @@
-import type { StoreApi } from 'zustand';
-import type { TranslatorState } from '../translatorStore';
+import type { TranslatorStoreGet, TranslatorStoreSet } from '../translatorStore';
 import type { AIMessage } from '@/services/ai/types';
 import { callFunction } from '@/services/ai/router';
 import { buildTranslationMessages, buildRetranslationMessages } from '@/services/ai/promptBuilder';
@@ -9,15 +8,12 @@ import { useGlossaryStore } from '@/stores/glossaryStore';
 import { AI_PROVIDERS } from '@/stores/aiModels';
 import { useCostTrackingStore } from '@/stores/costTrackingStore';
 
-type Get = StoreApi<TranslatorState>['getState'];
-type Set = StoreApi<TranslatorState>['setState'];
-
 let messageCounter = 0;
 export function genId() {
   return `msg-${++messageCounter}-${Date.now()}`;
 }
 
-export async function performSendMessage(content: string, get: Get, set: Set): Promise<void> {
+export async function performSendMessage(content: string, get: TranslatorStoreGet, set: TranslatorStoreSet): Promise<void> {
   const state = get();
   if (state.isLoading) return;
 
@@ -107,16 +103,8 @@ export async function performSendMessage(content: string, get: Get, set: Set): P
       });
     }
 
-    // Build chat history for translation context
-    const chatHistory: AIMessage[] = state.messages.map((m) => ({
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: m.content,
-    }));
-    // Add current user message to history
-    chatHistory.push({ role: 'user', content });
-
     // For the first message, use the full translation prompt builder
-    // For follow-up messages, just pass the conversation history
+    // For follow-up messages, pass the conversation history
     let messages: AIMessage[];
     if (state.messages.length === 0) {
       if (state.replacementRange) {
@@ -138,7 +126,12 @@ export async function performSendMessage(content: string, get: Get, set: Set): P
         );
       }
     } else {
-      // Follow-up: system prompt + full history
+      // Follow-up: build chat history for translation context
+      const chatHistory: AIMessage[] = state.messages.map((m) => ({
+        role: m.role as 'user' | 'assistant' | 'system',
+        content: m.content,
+      }));
+      chatHistory.push({ role: 'user', content });
       messages = buildTranslationMessages(
         fnConfig.prompt,
         state.originalText,

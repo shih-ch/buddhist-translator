@@ -1,5 +1,4 @@
-import type { StoreApi } from 'zustand';
-import type { TranslatorState } from '../translatorStore';
+import type { TranslatorStoreGet, TranslatorStoreSet } from '../translatorStore';
 import type { AIMessage } from '@/services/ai/types';
 import type { AIProviderId } from '@/types/settings';
 import { assembleMarkdown } from '@/services/markdownUtils';
@@ -8,11 +7,8 @@ import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTranslationMemoryStore } from '@/stores/translationMemoryStore';
 import { logTranslation } from '@/services/translationLogger';
-import { persistVersions } from '../translatorStore';
+import { persistVersions } from './versionStorage';
 import { toast } from 'sonner';
-
-type Get = StoreApi<TranslatorState>['getState'];
-type Set = StoreApi<TranslatorState>['setState'];
 
 /** Use AI to extract metadata (title, author) from translated content */
 async function extractMetadataFromContent(
@@ -74,7 +70,7 @@ ${requests.join('\n')}
   }
 }
 
-export function performAdoptVersion(messageId: string, get: Get, set: Set): void {
+export function performAdoptVersion(messageId: string, get: TranslatorStoreGet, set: TranslatorStoreSet): void {
   const state = get();
   const msg = state.messages.find((m) => m.id === messageId);
   if (!msg) return;
@@ -131,17 +127,17 @@ export function performAdoptVersion(messageId: string, get: Get, set: Set): void
       { title: needTitle, author: needAuthor },
     ).then((extracted) => {
       // Guard: if store was reset while extraction was in-flight, skip
-      if (get().messages.length === 0) return;
+      const latest = get();
+      if (latest.messages.length === 0) return;
       if (extracted.title || extracted.author) {
         const updated = {
-          ...get().metadata,
+          ...latest.metadata,
           ...(extracted.title ? { title: extracted.title } : {}),
           ...(extracted.author ? { author: extracted.author } : {}),
         };
-        set({ metadata: updated });
-        const imgs = get().articleImages.length > 0 ? get().articleImages : undefined;
-        const newMd = assembleMarkdown(updated, msg.content, get().originalText || undefined, imgs);
-        set({ previewContent: newMd });
+        const imgs = latest.articleImages.length > 0 ? latest.articleImages : undefined;
+        const newMd = assembleMarkdown(updated, msg.content, latest.originalText || undefined, imgs);
+        set({ metadata: updated, previewContent: newMd });
         const parts: string[] = [];
         if (extracted.title) parts.push(`標題：${extracted.title}`);
         if (extracted.author) parts.push(`作者：${extracted.author}`);
