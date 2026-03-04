@@ -57,6 +57,13 @@ export function ChatPanel() {
     setShowTermExtractor(true);
   };
 
+  const handleAdoptFull = (messageId: string) => {
+    setReplacementRange(null);
+    adoptVersion(messageId);
+    setAdoptedMessageId(messageId);
+    setShowTermExtractor(true);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -106,6 +113,7 @@ export function ChatPanel() {
                 key={msg.id}
                 message={msg}
                 onAdopt={msg.role === 'assistant' ? () => handleAdopt(msg.id) : undefined}
+                onAdoptFull={msg.role === 'assistant' && replacementRange ? () => handleAdoptFull(msg.id) : undefined}
                 isStreaming={isLoading && idx === arr.length - 1 && msg.role === 'assistant'}
               />
             ))}

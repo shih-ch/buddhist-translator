@@ -17,7 +17,7 @@ import { ImageUploader } from './ImageUploader';
 import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
 import { useGlossaryStore } from '@/stores/glossaryStore';
 import { trackedCallFunction } from '@/services/ai/trackedCall';
-import { annotateGlossaryTerms } from '@/services/glossaryAnnotator';
+import { annotateGlossaryTerms, removeAnnotations } from '@/services/glossaryAnnotator';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -28,6 +28,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { AnnotationMode } from '@/services/glossaryAnnotator';
@@ -264,6 +265,25 @@ ${htmlContent}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleAnnotateTerms('link')}>
                     [連結] 標注
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => {
+                    if (!previewContent) return;
+                    const fmMatch = previewContent.match(/^(---\n[\s\S]*?\n---)\n*/);
+                    const frontmatterBlock = fmMatch ? fmMatch[1] : '';
+                    const body = fmMatch ? previewContent.slice(fmMatch[0].length) : previewContent;
+                    const cleaned = removeAnnotations(body);
+                    if (cleaned === body) {
+                      toast.info('沒有找到標注');
+                      return;
+                    }
+                    const result = frontmatterBlock
+                      ? frontmatterBlock + '\n\n' + cleaned
+                      : cleaned;
+                    setPreviewContent(result);
+                    toast.success('已移除所有標注');
+                  }}>
+                    移除標注
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

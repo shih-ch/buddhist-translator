@@ -55,6 +55,19 @@ function isInProtectedRange(pos: number, len: number, ranges: [number, number][]
   return ranges.some(([start, stop]) => pos >= start && end <= stop);
 }
 
+/**
+ * Remove glossary annotations from text:
+ * - <abbr title="...">text</abbr> → text
+ * - [text](url "tooltip") → text (only links with tooltip, i.e. glossary-generated)
+ */
+export function removeAnnotations(text: string): string {
+  // Remove <abbr title="...">text</abbr>
+  let result = text.replace(/<abbr\s+title="[^"]*">([^<]*)<\/abbr>/gi, '$1');
+  // Remove [text](url "tooltip") — only links with a quoted tooltip
+  result = result.replace(/\[([^\]]+)\]\([^\s)]+\s+"[^"]*"\)/g, '$1');
+  return result;
+}
+
 export function annotateGlossaryTerms(
   body: string,
   terms: GlossaryTerm[],

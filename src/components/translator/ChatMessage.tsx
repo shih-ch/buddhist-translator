@@ -9,10 +9,11 @@ import type { ChatMessage as ChatMessageType } from '@/types/chat';
 interface ChatMessageProps {
   message: ChatMessageType;
   onAdopt?: () => void;
+  onAdoptFull?: () => void;
   isStreaming?: boolean;
 }
 
-export function ChatMessage({ message, onAdopt, isStreaming }: ChatMessageProps) {
+export function ChatMessage({ message, onAdopt, onAdoptFull, isStreaming }: ChatMessageProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
   const isUser = message.role === 'user';
@@ -51,10 +52,23 @@ export function ChatMessage({ message, onAdopt, isStreaming }: ChatMessageProps)
         {!isUser && message.content && (
           <div className="mt-2 flex items-center gap-2 border-t pt-2">
             {onAdopt && !isStreaming && (
-              <Button variant="outline" size="xs" onClick={onAdopt}>
-                <Check className="mr-1 h-3 w-3" />
-                採用此版本
-              </Button>
+              onAdoptFull ? (
+                <>
+                  <Button variant="outline" size="xs" onClick={onAdopt}>
+                    <Check className="mr-1 h-3 w-3" />
+                    替換段落
+                  </Button>
+                  <Button variant="outline" size="xs" onClick={onAdoptFull}>
+                    <Check className="mr-1 h-3 w-3" />
+                    取代全文
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" size="xs" onClick={onAdopt}>
+                  <Check className="mr-1 h-3 w-3" />
+                  採用此版本
+                </Button>
+              )
             )}
             <Button variant="ghost" size="xs" onClick={handleCopy}>
               {copied ? (
