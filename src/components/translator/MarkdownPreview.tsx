@@ -93,17 +93,24 @@ function processChildren(
   regex: RegExp,
   termMap: Map<string, GlossaryTerm>,
 ): ReactNode {
-  if (typeof children === 'string') {
-    const result = highlightTerms(children, regex, termMap);
-    return result.length === 1 && typeof result[0] === 'string' ? result[0] : <>{result}</>;
+  try {
+    if (children == null || typeof children === 'boolean') return children;
+    if (typeof children === 'number') return String(children);
+    if (typeof children === 'string') {
+      const result = highlightTerms(children, regex, termMap);
+      return result.length === 1 && typeof result[0] === 'string' ? result[0] : <>{result}</>;
+    }
+    if (Array.isArray(children)) {
+      return children.map((child, i) => {
+        const processed = processChildren(child, regex, termMap);
+        return typeof processed === 'string' ? processed : <span key={i}>{processed}</span>;
+      });
+    }
+    return children;
+  } catch {
+    // Fallback: return children unmodified to prevent crash
+    return children;
   }
-  if (Array.isArray(children)) {
-    return children.map((child, i) => {
-      const processed = processChildren(child, regex, termMap);
-      return typeof processed === 'string' ? processed : <span key={i}>{processed}</span>;
-    });
-  }
-  return children;
 }
 
 export function MarkdownPreview({ content }: MarkdownPreviewProps) {
@@ -226,9 +233,13 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
           components={{
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             p: shouldHighlight
-              ? ({ children, ...props }: any) => (
-                  <p {...props}>{processChildren(children, regex!, termMap)}</p>
-                )
+              ? ({ children, ...props }: any) => {
+                  try {
+                    return <p {...props}>{processChildren(children, regex!, termMap)}</p>;
+                  } catch {
+                    return <p {...props}>{children}</p>;
+                  }
+                }
               : undefined,
             // Render <details> as collapsible with styling
             // eslint-disable-next-line @typescript-eslint/no-explicit-any

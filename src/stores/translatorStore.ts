@@ -102,6 +102,9 @@ interface TranslatorState {
   // Abort controller for streaming
   abortController: AbortController | null;
 
+  // Partial replacement (select & retranslate)
+  replacementRange: { start: number; end: number; originalPreview: string } | null;
+
   // Actions
   setInputMode: (mode: 'paste' | 'url' | 'import' | 'cbeta') => void;
   setOriginalText: (text: string) => void;
@@ -117,6 +120,7 @@ interface TranslatorState {
   addArticleImage: (img: ArticleImage) => void;
   removeArticleImage: (path: string) => void;
   loadArticleForEdit: (article: Article) => void;
+  setReplacementRange: (range: { start: number; end: number; originalPreview: string } | null) => void;
   stopGeneration: () => void;
   reset: () => void;
   saveVersion: (name?: string) => void;
@@ -208,6 +212,7 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   articleImages: [],
   editingArticle: null,
   abortController: null,
+  replacementRange: null,
 
   setInputMode: (mode) => set({ inputMode: mode }),
 
@@ -433,6 +438,15 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     const msg = state.messages.find((m) => m.id === messageId);
     if (!msg) return;
 
+    // Partial replacement mode: splice result into existing previewContent
+    if (state.replacementRange) {
+      const { start, end, originalPreview } = state.replacementRange;
+      const newContent = originalPreview.slice(0, start) + msg.content.trim() + originalPreview.slice(end);
+      set({ previewContent: newContent, replacementRange: null });
+      toast.success('已替換選取段落');
+      return;
+    }
+
     // Set translator_model from the message's actual model (or current model)
     const actualModel = msg.model || state.currentModel.model;
     const metadata = { ...state.metadata, translator_model: actualModel };
@@ -549,6 +563,8 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     });
   },
 
+  setReplacementRange: (range) => set({ replacementRange: range }),
+
   stopGeneration: () => {
     const { abortController } = get();
     if (abortController) {
@@ -610,5 +626,6 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
       articleImages: [],
       editingArticle: null,
       abortController: null,
+      replacementRange: null,
     }),
 }));

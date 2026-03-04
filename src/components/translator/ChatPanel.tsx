@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Square, Languages, RotateCcw } from 'lucide-react';
+import { Send, Square, Languages, RotateCcw, X } from 'lucide-react';
 import { useTranslatorStore } from '@/stores/translatorStore';
 import { ModelSelector } from './ModelSelector';
 import { ChatMessage } from './ChatMessage';
@@ -20,6 +20,8 @@ export function ChatPanel() {
     adoptVersion,
     stopGeneration,
     reset,
+    replacementRange,
+    setReplacementRange,
   } = useTranslatorStore();
   const [input, setInput] = useState('');
   const [showTermExtractor, setShowTermExtractor] = useState(false);
@@ -69,6 +71,22 @@ export function ChatPanel() {
       <div className="shrink-0">
         <ModelSelector />
       </div>
+
+      {/* Replacement mode banner */}
+      {replacementRange && (
+        <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-200 shrink-0">
+          <span className="flex-1">段落替換模式：採用後將替換選取的段落</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5"
+            onClick={() => setReplacementRange(null)}
+            title="取消替換模式"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
 
       {/* Messages area */}
       <ScrollArea className="min-h-0 flex-1" ref={scrollRef}>

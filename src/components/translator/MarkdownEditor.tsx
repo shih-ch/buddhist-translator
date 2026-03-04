@@ -16,18 +16,18 @@ import {
   Undo2,
   Redo2,
   Sparkles,
-  Languages,
+  ArrowRightLeft,
   Loader2,
 } from 'lucide-react';
 import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useTranslatorStore } from '@/stores/translatorStore';
 import { trackedCallFunction } from '@/services/ai/trackedCall';
 import { toast } from 'sonner';
 
 interface MarkdownEditorProps {
   content: string;
   onChange: (content: string) => void;
-  originalText?: string;
 }
 
 type InsertAction = {
@@ -63,7 +63,7 @@ const TOOLBAR_ITEMS: { icon: React.ElementType; label: string; action: InsertAct
   },
 ];
 
-export function MarkdownEditor({ content, onChange, originalText }: MarkdownEditorProps) {
+export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const historyRef = useRef<{ stack: string[]; index: number }>({
     stack: [content],
@@ -71,7 +71,6 @@ export function MarkdownEditor({ content, onChange, originalText }: MarkdownEdit
   });
   const [selectedRange, setSelectedRange] = useState<{ start: number; end: number; text: string } | null>(null);
   const [formatting, setFormatting] = useState(false);
-  const [retranslating, setRetranslating] = useState(false);
 
   const pushHistory = useCallback((newContent: string) => {
     const h = historyRef.current;
@@ -192,34 +191,21 @@ export function MarkdownEditor({ content, onChange, originalText }: MarkdownEdit
     }
   }, [content, onChange, pushHistory]);
 
-  const handleRetranslate = useCallback(async () => {
+  const handleSendToTranslation = useCallback(() => {
     if (!selectedRange) return;
-    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('translation');
-    const apiKeys = useSettingsStore.getState().apiKeys;
-    if (!apiKeys[fnConfig.provider]) {
-      toast.error('請先在設定中填入 API Key');
-      return;
-    }
-    setRetranslating(true);
-    try {
-      const contextText = originalText ? `\n\n【原文參考】\n${originalText.slice(0, 3000)}` : '';
-      const systemPrompt = `${fnConfig.prompt}\n\n---\n以下是需要重新翻譯的段落，請重新翻譯為繁體中文。\n只輸出翻譯結果，不加任何說明或標記。${contextText}`;
-      const messages = [
-        { role: 'system' as const, content: systemPrompt },
-        { role: 'user' as const, content: selectedRange.text },
-      ];
-      const response = await trackedCallFunction(fnConfig, apiKeys, messages, undefined, 'translation');
-      const newContent = content.slice(0, selectedRange.start) + response.content.trim() + content.slice(selectedRange.end);
-      pushHistory(newContent);
-      onChange(newContent);
-      setSelectedRange(null);
-      toast.success('重新翻譯完成');
-    } catch (err) {
-      toast.error(`重新翻譯失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
-    } finally {
-      setRetranslating(false);
-    }
-  }, [content, onChange, pushHistory, selectedRange, originalText]);
+    const store = useTranslatorStore.getState();
+    // Store the replacement range so adoptVersion can splice back
+    store.setReplacementRange({
+      start: selectedRange.start,
+      end: selectedRange.end,
+      originalPreview: content,
+    });
+    // Send selected text to translation area and clear messages
+    store.setOriginalText(selectedRange.text);
+    useTranslatorStore.setState({ messages: [] });
+    setSelectedRange(null);
+    toast.info('已將選取段落送至翻譯區，請輸入指令後翻譯');
+  }, [content, selectedRange]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -306,11 +292,11 @@ export function MarkdownEditor({ content, onChange, originalText }: MarkdownEdit
           variant="ghost"
           size="icon"
           className="h-7 w-7"
-          title="重新翻譯選取段落"
-          onClick={handleRetranslate}
-          disabled={retranslating || !selectedRange}
+          title="選取段落送往翻譯區"
+          onClick={handleSendToTranslation}
+          disabled={!selectedRange}
         >
-          {retranslating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />}
+          <ArrowRightLeft className="h-3.5 w-3.5" />
         </Button>
       </div>
 

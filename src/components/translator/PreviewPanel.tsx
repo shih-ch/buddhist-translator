@@ -296,7 +296,6 @@ ${htmlContent}
               <MarkdownEditor
                 content={previewContent}
                 onChange={setPreviewContent}
-                originalText={originalText}
               />
             </TabsContent>
           </>
