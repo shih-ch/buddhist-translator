@@ -47,7 +47,9 @@ function cleanPastedText(text: string): { cleaned: string; removedCount: number 
 }
 
 export function PasteInput() {
-  const { originalText, setOriginalText, updateMetadata } = useTranslatorStore();
+  const originalText = useTranslatorStore((s) => s.originalText);
+  const setOriginalText = useTranslatorStore((s) => s.setOriginalText);
+  const updateMetadata = useTranslatorStore((s) => s.updateMetadata);
   const [detectedLang, setDetectedLang] = useState('');
   const [formatting, setFormatting] = useState(false);
 

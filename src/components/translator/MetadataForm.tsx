@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -15,7 +15,8 @@ import { useTranslatorStore } from '@/stores/translatorStore';
 import { detectLanguageAdvanced, getLanguageName } from '@/services/languageDetect';
 
 export function MetadataForm() {
-  const { metadata, updateMetadata } = useTranslatorStore();
+  const metadata = useTranslatorStore((s) => s.metadata);
+  const updateMetadata = useTranslatorStore((s) => s.updateMetadata);
   const originalText = useTranslatorStore((s) => s.originalText);
 
   const detection = useMemo(
@@ -23,12 +24,7 @@ export function MetadataForm() {
     [originalText]
   );
 
-  // Auto-fill original_language when text changes and detection is confident
-  useEffect(() => {
-    if (detection.language !== 'other' && detection.confidence > 40) {
-      updateMetadata({ original_language: detection.language });
-    }
-  }, [detection.language, detection.confidence]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Language auto-fill is handled by PasteInput's useEffect — MetadataForm only displays detection
 
   return (
     <div className="grid grid-cols-2 gap-x-2 gap-y-2 p-3">

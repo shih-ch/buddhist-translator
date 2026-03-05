@@ -4,23 +4,38 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Square, Languages, RotateCcw, X } from 'lucide-react';
 import { useTranslatorStore } from '@/stores/translatorStore';
+import { useShallow } from 'zustand/react/shallow';
 import { ModelSelector } from './ModelSelector';
 import { ChatMessage } from './ChatMessage';
 import { TermExtractor } from './TermExtractor';
 import { ShortcutPicker } from './ShortcutPicker';
 
 export function ChatPanel() {
-  const messages = useTranslatorStore((s) => s.messages);
-  const isLoading = useTranslatorStore((s) => s.isLoading);
-  const originalText = useTranslatorStore((s) => s.originalText);
-  const importedText = useTranslatorStore((s) => s.importedText);
-  const inputMode = useTranslatorStore((s) => s.inputMode);
-  const sendMessage = useTranslatorStore((s) => s.sendMessage);
-  const adoptVersion = useTranslatorStore((s) => s.adoptVersion);
-  const stopGeneration = useTranslatorStore((s) => s.stopGeneration);
-  const reset = useTranslatorStore((s) => s.reset);
-  const replacementRange = useTranslatorStore((s) => s.replacementRange);
-  const setReplacementRange = useTranslatorStore((s) => s.setReplacementRange);
+  const {
+    messages,
+    isLoading,
+    originalText,
+    importedText,
+    inputMode,
+    sendMessage,
+    adoptVersion,
+    stopGeneration,
+    reset,
+    replacementRange,
+    setReplacementRange,
+  } = useTranslatorStore(useShallow((s) => ({
+    messages: s.messages,
+    isLoading: s.isLoading,
+    originalText: s.originalText,
+    importedText: s.importedText,
+    inputMode: s.inputMode,
+    sendMessage: s.sendMessage,
+    adoptVersion: s.adoptVersion,
+    stopGeneration: s.stopGeneration,
+    reset: s.reset,
+    replacementRange: s.replacementRange,
+    setReplacementRange: s.setReplacementRange,
+  })));
   const [input, setInput] = useState('');
   const [showTermExtractor, setShowTermExtractor] = useState(false);
   const [adoptedMessageId, setAdoptedMessageId] = useState<string | null>(null);
