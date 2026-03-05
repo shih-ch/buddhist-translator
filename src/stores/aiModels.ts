@@ -41,8 +41,8 @@ export const AI_PROVIDERS: Record<AIProviderId, { name: string; models: AIModel[
     name: 'Google Gemini',
     models: [
       { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro (Preview)', inputPrice: 2, outputPrice: 12 },
-      { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (Preview)', inputPrice: 2, outputPrice: 12 },
       { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Preview)', inputPrice: 0.5, outputPrice: 3 },
+      { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash-Lite (Preview)', inputPrice: 0.25, outputPrice: 1.5 },
       { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', inputPrice: 1.25, outputPrice: 10 },
       { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', inputPrice: 0.3, outputPrice: 2.5 },
       { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', inputPrice: 0.1, outputPrice: 0.4 },

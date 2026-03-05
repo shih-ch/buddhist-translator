@@ -59,6 +59,8 @@
 - **Git**（選擇性，用於版本管理）
 - 現代瀏覽器（Chrome、Firefox、Edge、Safari）
 
+> **跨平台支援**：本工具為 Web 應用程式，可在 **Windows、macOS、Linux** 上使用。只要有 Node.js 和現代瀏覽器即可運行。線上版本 ([GitHub Pages](https://shih-ch.github.io/buddhist-translator/)) 不需安裝任何東西，直接用瀏覽器開啟即可。
+
 ### 第一步：取得程式碼
 
 ```bash
@@ -132,24 +134,84 @@ npx gh-pages -d dist
 
 進入 **設定** 頁面，填入你需要的 AI 服務 API Key：
 
-| 服務 | 用途 | 取得方式 |
+| 服務 | 用途 | 申請 API Key |
 |------|------|----------|
-| **OpenAI** | GPT-5/4 系列翻譯 | [platform.openai.com](https://platform.openai.com/api-keys) |
-| **Anthropic** | Claude 系列翻譯 | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
-| **Google Gemini** | Gemini 系列翻譯 | [aistudio.google.com](https://aistudio.google.com/apikey) |
-| **Perplexity** | Sonar 系列翻譯 | [perplexity.ai](https://www.perplexity.ai/settings/api) |
+| **OpenAI** | GPT-5/4 系列翻譯 | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| **Anthropic** | Claude 系列翻譯 | [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) |
+| **Google Gemini** | Gemini 系列翻譯 | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| **Perplexity** | Sonar 系列翻譯 | [perplexity.ai/settings/api](https://www.perplexity.ai/settings/api) |
+
+<details>
+<summary>📋 各家 API 申請步驟</summary>
+
+#### OpenAI
+
+1. 前往 [platform.openai.com](https://platform.openai.com/) 註冊帳號
+2. 進入 [API Keys](https://platform.openai.com/api-keys) 頁面
+3. 點擊「Create new secret key」建立金鑰
+4. 需要先 [加值](https://platform.openai.com/settings/organization/billing/overview) 才能使用（最低 $5 USD）
+
+#### Anthropic
+
+1. 前往 [console.anthropic.com](https://console.anthropic.com/) 註冊帳號
+2. 進入 [API Keys](https://console.anthropic.com/settings/keys) 頁面
+3. 點擊「Create Key」建立金鑰
+4. 需要先 [加值](https://console.anthropic.com/settings/billing) 才能使用（最低 $5 USD）
+
+#### Google Gemini
+
+1. 前往 [Google AI Studio](https://aistudio.google.com/) 使用 Google 帳號登入
+2. 點擊 [Get API Key](https://aistudio.google.com/apikey)
+3. 選擇或建立 Google Cloud 專案，即可取得金鑰
+4. **免費方案**：Gemini Flash 系列有免費額度（15 RPM），適合測試
+
+#### Perplexity
+
+1. 前往 [perplexity.ai](https://www.perplexity.ai/) 註冊帳號
+2. 進入 [API Settings](https://www.perplexity.ai/settings/api) 頁面
+3. 產生 API Key
+4. 需要先加值才能使用
+
+</details>
 
 > 至少需要一個 API Key 才能使用翻譯功能。線上辭典查詢不需要 API Key。
+>
+> 💡 **推薦新手**：Google Gemini 有免費額度，適合先試用。翻譯品質建議使用 GPT-5.1 或 Claude Sonnet 4.6。
 
 ### GitHub 設定（選擇性）
 
-如果要使用文章同步和儲存功能：
+如果要使用文章同步和術語表儲存功能，需要設定 GitHub Token。
 
-1. 建立 [GitHub Personal Access Token](https://github.com/settings/tokens)（需要 `repo` 權限）
-2. 在設定頁填入：
-   - **GitHub Token**: 你的 Personal Access Token
-   - **Repository**: 格式為 `owner/repo`（例如 `myuser/buddhist-articles`）
-   - **Branch**: 預設 `main`
+<details>
+<summary>📋 GitHub Token 申請教學</summary>
+
+#### 方法一：Fine-grained Token（推薦）
+
+1. 前往 [github.com/settings/tokens?type=beta](https://github.com/settings/tokens?type=beta)
+2. 點擊「Generate new token」
+3. 設定名稱（如 `buddhist-translator`）和到期日
+4. **Repository access** → 選「Only select repositories」→ 選擇你要存放翻譯的倉庫
+5. **Permissions** → Repository permissions → **Contents**: Read and write
+6. 點擊「Generate token」並複製
+
+#### 方法二：Classic Token
+
+1. 前往 [github.com/settings/tokens/new](https://github.com/settings/tokens/new)
+2. 設定名稱和到期日
+3. 勾選 **repo** 權限（完整倉庫存取）
+4. 點擊「Generate token」並複製
+
+> 詳細教學請參考 [GitHub 官方文件：建立個人存取權杖](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
+
+</details>
+
+在設定頁填入：
+
+- **GitHub Token**: 你的 Personal Access Token
+- **Repository**: 格式為 `owner/repo`（例如 `myuser/buddhist-articles`）
+- **Branch**: 預設 `main`
+
+> 如果倉庫不存在，系統會自動建立。
 
 ---
 
@@ -413,27 +475,63 @@ npx gh-pages -d dist
 
 ## AI 功能配置
 
-### 支援的 AI 模型
+### 支援的 AI 模型與價格
 
-**OpenAI：**
-- GPT-5.2 / GPT-5.1 / GPT-5
-- GPT-4o / GPT-4.1 / GPT-4.1-mini / GPT-4.1-nano
-- o3 / o4-mini
+所有價格為 **美元 / 每百萬 tokens**，即時費用追蹤內建於應用中。
 
-**Anthropic：**
-- Claude Opus 4.6 / 4.5
-- Claude Sonnet 4.6 / 4.5
-- Claude Haiku 4.5
+#### OpenAI（[申請 API Key](https://platform.openai.com/api-keys)）
 
-**Google Gemini：**
-- Gemini 3.1 Pro / 3.0 Pro
-- Gemini 2.5 Pro / Flash
+| 模型 | 輸入 | 輸出 | 特色 |
+|------|-----:|-----:|------|
+| GPT-5.2 | $1.75 | $14 | 最新旗艦 |
+| GPT-5.2 Pro | $21 | $168 | 頂級推理 |
+| GPT-5.1 | $1.25 | $10 | ⭐ 翻譯推薦 |
+| GPT-5 | $1.25 | $10 | 旗艦 |
+| GPT-4.1 | $2 | $8 | 穩定 |
+| GPT-4o | $2.50 | $10 | 多模態 |
+| o3 | $2 | $8 | 推理模型 |
+| o4-mini | $1.10 | $4.40 | 輕量推理 |
+| o3-mini | $1.10 | $4.40 | 輕量推理 |
+| GPT-5 Mini | $0.25 | $2 | 高性價比 |
+| GPT-4.1 Mini | $0.40 | $1.60 | 格式整理推薦 |
+| GPT-4o Mini | $0.15 | $0.60 | 最便宜 |
+| GPT-5 Nano | $0.05 | $0.40 | 超低成本 |
+| GPT-4.1 Nano | $0.10 | $0.40 | 超低成本 |
 
-**Perplexity：**
-- Sonar Pro / Sonar
-- Sonar Deep Research
+#### Anthropic（[申請 API Key](https://console.anthropic.com/settings/keys)）
 
-每個模型都有即時費用追蹤（依輸入/輸出 token 數計價）。
+| 模型 | 輸入 | 輸出 | 特色 |
+|------|-----:|-----:|------|
+| Claude Opus 4.6 | $5 | $25 | 最強智能 |
+| Claude Sonnet 4.6 | $3 | $15 | ⭐ 速度/品質均衡 |
+| Claude Opus 4.5 | $5 | $25 | 上代旗艦 |
+| Claude Sonnet 4.5 | $3 | $15 | 上代均衡 |
+| Claude Haiku 4.5 | $1 | $5 | 最快速 |
+
+#### Google Gemini（[申請 API Key](https://aistudio.google.com/apikey)）
+
+| 模型 | 輸入 | 輸出 | 特色 |
+|------|-----:|-----:|------|
+| Gemini 3.1 Pro | $2 | $12 | 最強推理（Preview） |
+| Gemini 3 Flash | $0.50 | $3 | 新世代快速（Preview） |
+| Gemini 3.1 Flash-Lite | $0.25 | $1.50 | 🆕 最新超值（Preview） |
+| Gemini 2.5 Pro | $1.25 | $10 | 穩定旗艦 |
+| Gemini 2.5 Flash | $0.30 | $2.50 | ⭐ 性價比首選 |
+| Gemini 2.5 Flash-Lite | $0.10 | $0.40 | 超低成本 |
+| Gemini 2.0 Flash | $0.10 | $0.40 | 術語補齊預設 |
+
+> 💡 Gemini Flash 系列有**免費額度**（15 RPM），適合試用。
+
+#### Perplexity（[申請 API Key](https://www.perplexity.ai/settings/api)）
+
+| 模型 | 輸入 | 輸出 | 特色 |
+|------|-----:|-----:|------|
+| Sonar Deep Research | $2 | $8 | 深度研究 |
+| Sonar Reasoning Pro | $2 | $8 | 推理搜尋 |
+| Sonar Pro | $3 | $15 | 進階搜尋 |
+| Sonar | $1 | $1 | 輕量搜尋 |
+
+> Perplexity 模型整合即時網路搜尋，適合查找佛學背景資料。另有每請求搜尋費用。
 
 ---
 
