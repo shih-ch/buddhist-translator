@@ -9,6 +9,8 @@ import { Highlighter } from 'lucide-react';
 import type { GlossaryTerm } from '@/types/glossary';
 import { CATEGORY_LABELS, escapeRegExp } from '@/services/glossaryAnnotator';
 
+const EMPTY_TERMS: GlossaryTerm[] = [];
+
 interface MarkdownPreviewProps {
   content: string;
 }
@@ -113,7 +115,7 @@ class HighlightErrorBoundary extends Component<
 
 export function MarkdownPreview({ content }: MarkdownPreviewProps) {
   const [highlightEnabled, setHighlightEnabled] = useState(true);
-  const terms = useGlossaryStore((s) => s.glossary?.terms ?? []);
+  const terms = useGlossaryStore((s) => s.glossary?.terms ?? EMPTY_TERMS);
 
   // Build regex and term lookup map
   const { regex, termMap } = useMemo(() => {
