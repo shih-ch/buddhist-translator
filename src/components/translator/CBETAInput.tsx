@@ -27,7 +27,8 @@ export function CBETAInput() {
   const [juanList, setJuanList] = useState<number[]>([]);
   const [selectedJuan, setSelectedJuan] = useState<string>('');
   const [fetchedText, setFetchedText] = useState('');
-  const { setOriginalText, updateMetadata } = useTranslatorStore();
+  const setOriginalText = useTranslatorStore((s) => s.setOriginalText);
+  const updateMetadata = useTranslatorStore((s) => s.updateMetadata);
 
   const handleLookup = async () => {
     const id = workId.trim();

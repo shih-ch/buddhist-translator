@@ -9,7 +9,9 @@ import { CBETAInput } from './CBETAInput';
 import { MetadataForm } from './MetadataForm';
 
 export function SourceInput() {
-  const { inputMode, setInputMode, setOriginalText } = useTranslatorStore();
+  const inputMode = useTranslatorStore((s) => s.inputMode);
+  const setInputMode = useTranslatorStore((s) => s.setInputMode);
+  const setOriginalText = useTranslatorStore((s) => s.setOriginalText);
   const [activeTab, setActiveTab] = useState<string>(inputMode);
 
   const handleTabChange = (v: string) => {

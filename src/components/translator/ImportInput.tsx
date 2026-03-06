@@ -12,8 +12,12 @@ import { parseMarkdown, assembleMarkdown } from '@/services/markdownUtils';
 import { toast } from 'sonner';
 
 export function ImportInput() {
-  const { importedText, setImportedText, setOriginalText, updateMetadata, setPreviewContent, metadata } =
-    useTranslatorStore();
+  const importedText = useTranslatorStore((s) => s.importedText);
+  const setImportedText = useTranslatorStore((s) => s.setImportedText);
+  const setOriginalText = useTranslatorStore((s) => s.setOriginalText);
+  const updateMetadata = useTranslatorStore((s) => s.updateMetadata);
+  const setPreviewContent = useTranslatorStore((s) => s.setPreviewContent);
+  const metadata = useTranslatorStore((s) => s.metadata);
   const [originalForImport, setOriginalForImport] = useState('');
   const [formatting, setFormatting] = useState(false);
 

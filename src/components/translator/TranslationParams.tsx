@@ -15,7 +15,9 @@ import { ParamPresets } from './ParamPresets';
 
 export function TranslationParams() {
   const [open, setOpen] = useState(false);
-  const { translationParams, setTranslationParams, activePreset } = useTranslatorStore();
+  const translationParams = useTranslatorStore((s) => s.translationParams);
+  const setTranslationParams = useTranslatorStore((s) => s.setTranslationParams);
+  const activePreset = useTranslatorStore((s) => s.activePreset);
   const p = translationParams;
 
   return (

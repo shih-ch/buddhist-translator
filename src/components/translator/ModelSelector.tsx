@@ -6,13 +6,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useTranslatorStore } from '@/stores/translatorStore';
+import { useShallow } from 'zustand/react/shallow';
 import { AI_PROVIDERS } from '@/stores/aiModels';
 import type { AIProviderId } from '@/types/settings';
 
 const PROVIDER_IDS = Object.keys(AI_PROVIDERS) as AIProviderId[];
 
 export function ModelSelector() {
-  const { currentModel, setCurrentModel, totalTokens, totalCost } = useTranslatorStore();
+  const currentModel = useTranslatorStore(useShallow((s) => s.currentModel));
+  const setCurrentModel = useTranslatorStore((s) => s.setCurrentModel);
+  const totalTokens = useTranslatorStore((s) => s.totalTokens);
+  const totalCost = useTranslatorStore((s) => s.totalCost);
 
   const currentProvider = AI_PROVIDERS[currentModel.provider];
   const models = currentProvider?.models ?? [];

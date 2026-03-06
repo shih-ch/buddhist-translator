@@ -66,7 +66,8 @@ const PRESETS: { name: string; icon: string; params: TranslationParams }[] = [
 ];
 
 export function ParamPresets() {
-  const { activePreset, applyPreset } = useTranslatorStore();
+  const activePreset = useTranslatorStore((s) => s.activePreset);
+  const applyPreset = useTranslatorStore((s) => s.applyPreset);
 
   return (
     <div className="flex flex-wrap gap-1.5">

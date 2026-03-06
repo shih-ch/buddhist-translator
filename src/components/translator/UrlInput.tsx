@@ -11,7 +11,8 @@ export function UrlInput() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetchedText, setFetchedText] = useState('');
-  const { setOriginalText, updateMetadata } = useTranslatorStore();
+  const setOriginalText = useTranslatorStore((s) => s.setOriginalText);
+  const updateMetadata = useTranslatorStore((s) => s.updateMetadata);
 
   const handleFetch = async () => {
     if (!url.trim()) return;
