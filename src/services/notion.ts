@@ -424,13 +424,13 @@ class NotionService {
       body: JSON.stringify({ properties: toCreate }),
     })
 
+    this.dbInitialized = true
     return created
   }
 
   private async autoInit(): Promise<void> {
     if (this.dbInitialized) return
     await this.ensureDatabaseProperties()
-    this.dbInitialized = true
   }
 
   // ─── Database Query ───
@@ -615,7 +615,16 @@ class NotionService {
     if (!this.token || !this.databaseId) return false
     try {
       const res = await this.apiFetch(`/v1/databases/${this.databaseId}`)
-      return res.ok
+      if (!res.ok) return false
+      // Detect title property name while we have the schema
+      const data = await res.json()
+      for (const [name, prop] of Object.entries(data.properties ?? {})) {
+        if ((prop as { type: string }).type === 'title') {
+          this.titlePropertyName = name
+          break
+        }
+      }
+      return true
     } catch {
       return false
     }
