@@ -1,6 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ApiKeySettings } from '@/components/settings/ApiKeySettings'
 import { GitHubSettings } from '@/components/settings/GitHubSettings'
+import { NotionSettings } from '@/components/settings/NotionSettings'
 import { AIFunctionList } from '@/components/settings/AIFunctionList'
 import { ParamPresetEditor } from '@/components/settings/ParamPresetEditor'
 import { CorrectionShortcuts } from '@/components/settings/CorrectionShortcuts'
@@ -20,6 +21,7 @@ export default function SettingsPage() {
         <TabsList>
           <TabsTrigger value="keys">API Keys</TabsTrigger>
           <TabsTrigger value="github">GitHub</TabsTrigger>
+          <TabsTrigger value="notion">Notion</TabsTrigger>
           <TabsTrigger value="ai">AI 功能</TabsTrigger>
           <TabsTrigger value="presets">翻譯預設</TabsTrigger>
           <TabsTrigger value="shortcuts">修正快捷</TabsTrigger>
@@ -31,6 +33,10 @@ export default function SettingsPage() {
 
         <TabsContent value="github" className="mt-4">
           <GitHubSettings />
+        </TabsContent>
+
+        <TabsContent value="notion" className="mt-4">
+          <NotionSettings />
         </TabsContent>
 
         <TabsContent value="ai" className="mt-4">

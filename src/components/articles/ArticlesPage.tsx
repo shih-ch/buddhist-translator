@@ -6,6 +6,7 @@ import { useArticlesStore } from '@/stores/articlesStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { ArticleFilters } from './ArticleFilters'
 import { ArticleList } from './ArticleList'
+import { NotionBatchExport } from './NotionBatchExport'
 
 export function ArticlesPageContent() {
   const {
@@ -17,6 +18,9 @@ export function ArticlesPageContent() {
     deleteArticle,
     getAuthors,
   } = useArticlesStore()
+
+  const notionToken = useSettingsStore((s) => s.notionToken)
+  const notionDatabaseId = useSettingsStore((s) => s.notionDatabaseId)
 
   const { getGitHubRepo, githubBranch } = useSettingsStore()
 
@@ -63,7 +67,10 @@ export function ArticlesPageContent() {
     <div className="space-y-6">
       {/* Translations section */}
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold">翻譯文章</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">翻譯文章</h3>
+          {notionToken && notionDatabaseId && <NotionBatchExport />}
+        </div>
         <ArticleFilters
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}

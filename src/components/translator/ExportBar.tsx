@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Copy, Github, Check, Loader2, FileType, FileSpreadsheet } from 'lucide-react';
+import { Download, Copy, Github, Check, Loader2, FileType, FileSpreadsheet, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTranslatorStore } from '@/stores/translatorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -9,6 +9,7 @@ import { ImageUploader } from './ImageUploader';
 import { toast } from 'sonner';
 import React from 'react';
 import { exportPDF, exportDOCX } from '@/services/exportFormats';
+import { notionService } from '@/services/notion';
 
 async function renderMarkdownToHtml(markdown: string): Promise<string> {
   const ReactMarkdown = (await import('react-markdown')).default;
@@ -36,9 +37,12 @@ export function ExportBar() {
   const originalText = useTranslatorStore((s) => s.originalText);
   const articleImages = useTranslatorStore((s) => s.articleImages);
   const githubToken = useSettingsStore((s) => s.githubToken);
+  const notionToken = useSettingsStore((s) => s.notionToken);
+  const notionDatabaseId = useSettingsStore((s) => s.notionDatabaseId);
 
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingNotion, setSavingNotion] = useState(false);
 
   const handleDownloadMd = () => {
     if (!previewContent) return;
@@ -144,18 +148,133 @@ ${htmlContent}
     }
   };
 
+  const hasNotion = !!(notionToken && notionDatabaseId);
+
+  const handleSaveToNotion = async () => {
+    if (!previewContent || !hasNotion) return;
+    setSavingNotion(true);
+    try {
+      const parsed = parseMarkdown(previewContent);
+      const mergedFrontmatter = { ...metadata, ...parsed.frontmatter };
+      const path = editingArticle?.path ?? '';
+      await notionService.saveTranslation({
+        path,
+        frontmatter: mergedFrontmatter,
+        content: parsed.content,
+        originalText: parsed.originalText ?? originalText,
+      });
+      toast.success('已儲存到 Notion');
+    } catch (err) {
+      toast.error(`Notion 儲存失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSavingNotion(false);
+    }
+  };
+
+  const handleSaveBoth = async () => {
+    if (!previewContent) return;
+    const parsed = parseMarkdown(previewContent);
+    const mergedFrontmatter = { ...metadata, ...parsed.frontmatter };
+
+    const tasks: Promise<{ target: string }>[] = [];
+
+    if (githubToken) {
+      setSaving(true);
+      tasks.push(
+        (async () => {
+          const { path, sha } = await githubService.saveTranslation(
+            {
+              path: editingArticle?.path ?? '',
+              frontmatter: mergedFrontmatter,
+              content: parsed.content,
+              originalText: parsed.originalText ?? originalText,
+              sha: editingArticle?.sha,
+            },
+            articleImages.length > 0 ? articleImages : undefined
+          );
+          useTranslatorStore.setState({
+            editingArticle: {
+              path,
+              sha,
+              frontmatter: mergedFrontmatter,
+              content: parsed.content,
+              originalText: parsed.originalText ?? originalText,
+            },
+          });
+          return { target: 'GitHub' };
+        })()
+      );
+    }
+
+    if (hasNotion) {
+      setSavingNotion(true);
+      tasks.push(
+        (async () => {
+          await notionService.saveTranslation({
+            path: editingArticle?.path ?? '',
+            frontmatter: mergedFrontmatter,
+            content: parsed.content,
+            originalText: parsed.originalText ?? originalText,
+          });
+          return { target: 'Notion' };
+        })()
+      );
+    }
+
+    const results = await Promise.allSettled(tasks);
+    const successes: string[] = [];
+    const failures: string[] = [];
+    for (const r of results) {
+      if (r.status === 'fulfilled') successes.push(r.value.target);
+      else failures.push(r.reason?.message ?? 'Unknown error');
+    }
+
+    setSaving(false);
+    setSavingNotion(false);
+
+    if (successes.length > 0) toast.success(`已儲存到 ${successes.join(' + ')}`);
+    if (failures.length > 0) toast.error(`儲存失敗：${failures.join('; ')}`);
+  };
+
+  const isSavingAny = saving || savingNotion;
+
   return (
     <div className="flex flex-wrap gap-1.5 border-t p-2 shrink-0">
-      <Button
-        variant="default"
-        size="sm"
-        className="text-xs"
-        onClick={handleSaveToGithub}
-        disabled={!previewContent || saving}
-      >
-        {saving ? <Loader2 className="size-3 mr-1 animate-spin" /> : <Github className="size-3 mr-1" />}
-        {saving ? '儲存中...' : '儲存到 GitHub'}
-      </Button>
+      {hasNotion ? (
+        <Button
+          variant="default"
+          size="sm"
+          className="text-xs"
+          onClick={handleSaveBoth}
+          disabled={!previewContent || isSavingAny}
+        >
+          {isSavingAny ? <Loader2 className="size-3 mr-1 animate-spin" /> : <Github className="size-3 mr-1" />}
+          {isSavingAny ? '儲存中...' : '儲存到 GitHub + Notion'}
+        </Button>
+      ) : (
+        <Button
+          variant="default"
+          size="sm"
+          className="text-xs"
+          onClick={handleSaveToGithub}
+          disabled={!previewContent || saving}
+        >
+          {saving ? <Loader2 className="size-3 mr-1 animate-spin" /> : <Github className="size-3 mr-1" />}
+          {saving ? '儲存中...' : '儲存到 GitHub'}
+        </Button>
+      )}
+      {hasNotion && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs"
+          onClick={handleSaveToNotion}
+          disabled={!previewContent || savingNotion}
+        >
+          {savingNotion ? <Loader2 className="size-3 mr-1 animate-spin" /> : <BookOpen className="size-3 mr-1" />}
+          Notion
+        </Button>
+      )}
       <Button
         variant="outline"
         size="sm"

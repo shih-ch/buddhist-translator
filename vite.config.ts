@@ -8,6 +8,13 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5178,
+    proxy: {
+      '/notion-api': {
+        target: 'https://api.notion.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/notion-api/, ''),
+      },
+    },
   },
   preview: {
     port: 5178,
