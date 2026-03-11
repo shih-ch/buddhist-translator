@@ -352,9 +352,7 @@ class NotionService {
   }
 
   private get baseUrl(): string {
-    if (import.meta.env.DEV) return '/notion-api'
-    const proxyUrl = useSettingsStore.getState().notionProxyUrl
-    return proxyUrl || '/notion-api'
+    return '/notion-api'
   }
 
   private async apiFetch(
@@ -375,6 +373,45 @@ class NotionService {
       throw new Error(`Notion API ${res.status}: ${body}`)
     }
     return res
+  }
+
+  // ─── Database Setup ───
+
+  async ensureDatabaseProperties(): Promise<string[]> {
+    // Get current database schema
+    const res = await this.apiFetch(`/v1/databases/${this.databaseId}`)
+    const data = await res.json()
+    const existing = Object.keys(data.properties ?? {})
+
+    const required: Record<string, Record<string, unknown>> = {
+      'Author': { rich_text: {} },
+      'Date': { date: {} },
+      'Original Language': { select: {} },
+      'Translator Model': { rich_text: {} },
+      'Source': { url: {} },
+      'Tags': { multi_select: {} },
+      'GitHub Path': { rich_text: {} },
+    }
+
+    // Filter out properties that already exist
+    const toCreate: Record<string, Record<string, unknown>> = {}
+    const created: string[] = []
+    for (const [name, config] of Object.entries(required)) {
+      if (!existing.includes(name)) {
+        toCreate[name] = config
+        created.push(name)
+      }
+    }
+
+    if (Object.keys(toCreate).length === 0) return []
+
+    // PATCH to add missing properties
+    await this.apiFetch(`/v1/databases/${this.databaseId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ properties: toCreate }),
+    })
+
+    return created
   }
 
   // ─── Database Query ───

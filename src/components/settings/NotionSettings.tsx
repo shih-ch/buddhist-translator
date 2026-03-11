@@ -11,11 +11,12 @@ export function NotionSettings() {
   const {
     notionToken, setNotionToken,
     notionDatabaseId, setNotionDatabaseId,
-    notionProxyUrl, setNotionProxyUrl,
   } = useSettingsStore()
 
   const [testState, setTestState] = useState<'idle' | 'loading' | 'ok' | 'fail'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
+  const [initState, setInitState] = useState<'idle' | 'loading' | 'done' | 'fail'>('idle')
+  const [initMsg, setInitMsg] = useState('')
 
   const handleTest = async () => {
     setTestState('loading')
@@ -27,6 +28,23 @@ export function NotionSettings() {
     } catch (err) {
       setTestState('fail')
       setErrorMsg(err instanceof Error ? err.message : '未知錯誤')
+    }
+  }
+
+  const handleInitDb = async () => {
+    setInitState('loading')
+    setInitMsg('')
+    try {
+      const created = await notionService.ensureDatabaseProperties()
+      setInitState('done')
+      if (created.length === 0) {
+        setInitMsg('所有欄位已存在，無需建立')
+      } else {
+        setInitMsg(`已建立：${created.join('、')}`)
+      }
+    } catch (err) {
+      setInitState('fail')
+      setInitMsg(err instanceof Error ? err.message : '未知錯誤')
     }
   }
 
@@ -74,20 +92,6 @@ export function NotionSettings() {
           </p>
         </div>
 
-        <div className="space-y-1">
-          <Label htmlFor="notion-proxy">CORS Proxy URL（Production 用）</Label>
-          <Input
-            id="notion-proxy"
-            placeholder="https://your-worker.workers.dev"
-            value={notionProxyUrl}
-            onChange={(e) => setNotionProxyUrl(e.target.value)}
-            autoComplete="off"
-          />
-          <p className="text-xs text-muted-foreground">
-            開發環境使用 Vite proxy，Production 需部署 Cloudflare Worker（見 docs/cloudflare-notion-proxy.js）。
-          </p>
-        </div>
-
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
@@ -104,6 +108,27 @@ export function NotionSettings() {
               <XCircle className="h-5 w-5 text-red-500" />
               {errorMsg && <span className="text-xs text-red-500">{errorMsg}</span>}
             </span>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!notionToken || !notionDatabaseId || initState === 'loading'}
+            onClick={handleInitDb}
+          >
+            {initState === 'loading' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+            初始化 Database 欄位
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            自動建立所需的 property（Author、Date、Tags 等），已存在的不會重複建立。
+          </p>
+          {initState === 'done' && (
+            <p className="text-xs text-green-600">{initMsg}</p>
+          )}
+          {initState === 'fail' && (
+            <p className="text-xs text-red-600">{initMsg}</p>
           )}
         </div>
       </CardContent>

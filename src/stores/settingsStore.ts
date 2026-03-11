@@ -10,7 +10,6 @@ const KEYS = {
   preferences: 'bt-preferences',
   notionToken: 'bt-notion-token',
   notionDatabaseId: 'bt-notion-database-id',
-  notionProxyUrl: 'bt-notion-proxy-url',
 } as const
 
 interface ApiKeys {
@@ -49,10 +48,8 @@ interface SettingsState {
   // Notion
   notionToken: string
   notionDatabaseId: string
-  notionProxyUrl: string
   setNotionToken: (token: string) => void
   setNotionDatabaseId: (id: string) => void
-  setNotionProxyUrl: (url: string) => void
 
   // Preferences
   setPreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => void
@@ -77,7 +74,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   preferences: loadJson<Preferences>(KEYS.preferences, { lastPreset: '', annotationMode: 'abbr' }),
   notionToken: localStorage.getItem(KEYS.notionToken) ?? '',
   notionDatabaseId: localStorage.getItem(KEYS.notionDatabaseId) ?? '',
-  notionProxyUrl: localStorage.getItem(KEYS.notionProxyUrl) ?? '',
 
   getApiKey: (provider) => get().apiKeys[provider],
 
@@ -194,11 +190,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setNotionDatabaseId: (id) => {
     localStorage.setItem(KEYS.notionDatabaseId, id)
     set({ notionDatabaseId: id })
-  },
-
-  setNotionProxyUrl: (url) => {
-    localStorage.setItem(KEYS.notionProxyUrl, url)
-    set({ notionProxyUrl: url })
   },
 
   setPreference: (key, value) => {
