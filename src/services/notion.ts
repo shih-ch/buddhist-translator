@@ -343,6 +343,8 @@ export function markdownToBlocks(md: string): NotionBlock[] {
 // ─── Notion Service ───
 
 class NotionService {
+  private dbInitialized = false
+
   private get token(): string {
     return useSettingsStore.getState().notionToken
   }
@@ -414,9 +416,16 @@ class NotionService {
     return created
   }
 
+  private async autoInit(): Promise<void> {
+    if (this.dbInitialized) return
+    await this.ensureDatabaseProperties()
+    this.dbInitialized = true
+  }
+
   // ─── Database Query ───
 
   async findPageByGitHubPath(githubPath: string): Promise<string | null> {
+    await this.autoInit()
     const res = await this.apiFetch(`/v1/databases/${this.databaseId}/query`, {
       method: 'POST',
       body: JSON.stringify({
