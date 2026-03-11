@@ -344,6 +344,7 @@ export function markdownToBlocks(md: string): NotionBlock[] {
 
 class NotionService {
   private dbInitialized = false
+  private titlePropertyName = 'Title'
 
   private get token(): string {
     return useSettingsStore.getState().notionToken
@@ -383,7 +384,17 @@ class NotionService {
     // Get current database schema
     const res = await this.apiFetch(`/v1/databases/${this.databaseId}`)
     const data = await res.json()
-    const existing = Object.keys(data.properties ?? {})
+    const existing = data.properties ?? {}
+
+    // Detect the actual title property name
+    for (const [name, prop] of Object.entries(existing)) {
+      if ((prop as { type: string }).type === 'title') {
+        this.titlePropertyName = name
+        break
+      }
+    }
+
+    const existingNames = Object.keys(existing)
 
     const required: Record<string, Record<string, unknown>> = {
       'Author': { rich_text: {} },
@@ -399,7 +410,7 @@ class NotionService {
     const toCreate: Record<string, Record<string, unknown>> = {}
     const created: string[] = []
     for (const [name, config] of Object.entries(required)) {
-      if (!existing.includes(name)) {
+      if (!existingNames.includes(name)) {
         toCreate[name] = config
         created.push(name)
       }
@@ -450,7 +461,7 @@ class NotionService {
     githubPath: string
   ): Record<string, unknown> {
     const props: Record<string, unknown> = {
-      Title: {
+      [this.titlePropertyName]: {
         title: [{ type: 'text', text: { content: frontmatter.title || 'Untitled' } }],
       },
       'GitHub Path': {
