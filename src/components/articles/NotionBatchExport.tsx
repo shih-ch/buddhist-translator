@@ -28,6 +28,7 @@ export function NotionBatchExport() {
   const [currentTitle, setCurrentTitle] = useState('')
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [summary, setSummary] = useState({ success: 0, skipped: 0, failed: 0 })
+  const [overwrite, setOverwrite] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
   const handleStart = useCallback(async () => {
@@ -65,12 +66,14 @@ export function NotionBatchExport() {
         await yieldToMain()
 
         try {
-          // Check if already in Notion (skip if exists)
-          const existingId = await notionService.findPageByGitHubPath(path)
-          if (existingId) {
-            skipped++
-            setLogs((prev) => [...prev, { title, status: 'skipped' }])
-            continue
+          // Check if already in Notion (skip if exists, unless overwrite)
+          if (!overwrite) {
+            const existingId = await notionService.findPageByGitHubPath(path)
+            if (existingId) {
+              skipped++
+              setLogs((prev) => [...prev, { title, status: 'skipped' }])
+              continue
+            }
           }
 
           // Load full article from GitHub
@@ -103,7 +106,7 @@ export function NotionBatchExport() {
       console.error('[NotionBatchExport]', err)
       setPhase('done')
     }
-  }, [])
+  }, [overwrite])
 
   const handleCancel = () => {
     abortRef.current?.abort()
@@ -139,8 +142,16 @@ export function NotionBatchExport() {
         {phase === 'idle' && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              將 GitHub 上所有翻譯文章匯出到 Notion Database。已存在的文章（以 GitHub Path 判斷）會自動跳過。
+              將 GitHub 上所有翻譯文章匯出到 Notion Database。
             </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={overwrite}
+                onChange={(e) => setOverwrite(e.target.checked)}
+              />
+              覆蓋已存在的文章（重新匯出所有）
+            </label>
             <Button onClick={handleStart}>開始匯出</Button>
           </div>
         )}
