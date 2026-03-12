@@ -35,9 +35,8 @@ let lastRequestTime = 0
 async function rateLimit(): Promise<void> {
   const now = Date.now()
   const elapsed = now - lastRequestTime
-  if (elapsed < 334) {
-    await new Promise((r) => setTimeout(r, 334 - elapsed))
-  }
+  const wait = Math.max(334 - elapsed, 0)
+  await new Promise((r) => setTimeout(r, wait))
   lastRequestTime = Date.now()
 }
 
@@ -47,46 +46,44 @@ const RICH_TEXT_LIMIT = 2000
 
 function parseInlineMarkdown(text: string): NotionRichText[] {
   const result: NotionRichText[] = []
-  // Regex for inline: bold, italic, code, strikethrough, links
-  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|~~(.+?)~~|\[([^\]]+)\]\(([^)]+)\))/g
+
+  // Fast path: no formatting characters → plain text
+  if (!/[*`~\[]/.test(text)) {
+    pushTextChunks(result, text, {})
+    if (result.length === 0) result.push({ type: 'text', text: { content: '' } })
+    return result
+  }
+
+  // Use non-backtracking patterns with [^] character classes instead of .+?
+  const regex = /(\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`|~~([^~]+)~~|\[([^\]]+)\]\(([^)]+)\))/g
   let lastIndex = 0
 
   let match: RegExpExecArray | null
   while ((match = regex.exec(text)) !== null) {
-    // Text before match
     if (match.index > lastIndex) {
       pushTextChunks(result, text.slice(lastIndex, match.index), {})
     }
 
     if (match[2]) {
-      // **bold**
       pushTextChunks(result, match[2], { bold: true })
     } else if (match[3]) {
-      // *italic*
       pushTextChunks(result, match[3], { italic: true })
     } else if (match[4]) {
-      // `code`
       pushTextChunks(result, match[4], { code: true })
     } else if (match[5]) {
-      // ~~strikethrough~~
       pushTextChunks(result, match[5], { strikethrough: true })
     } else if (match[6] && match[7]) {
-      // [text](url)
       pushTextChunks(result, match[6], {}, match[7])
     }
 
     lastIndex = match.index + match[0].length
   }
 
-  // Remaining text
   if (lastIndex < text.length) {
     pushTextChunks(result, text.slice(lastIndex), {})
   }
 
-  if (result.length === 0) {
-    result.push({ type: 'text', text: { content: '' } })
-  }
-
+  if (result.length === 0) result.push({ type: 'text', text: { content: '' } })
   return result
 }
 
@@ -310,31 +307,13 @@ export function markdownToBlocks(md: string): NotionBlock[] {
       continue
     }
 
-    // Paragraph (collect consecutive non-blank lines)
-    const paraLines: string[] = []
-    while (
-      i < lines.length &&
-      lines[i].trim() !== '' &&
-      !lines[i].startsWith('#') &&
-      !lines[i].startsWith('```') &&
-      !lines[i].startsWith('> ') &&
-      !/^[-*]\s+/.test(lines[i]) &&
-      !/^\d+\.\s+/.test(lines[i]) &&
-      !/^---+$/.test(lines[i].trim()) &&
-      !lines[i].trim().startsWith('|') &&
-      !lines[i].trim().startsWith('<details>') &&
-      !lines[i].match(/^!\[/)
-    ) {
-      paraLines.push(lines[i])
-      i++
-    }
-    if (paraLines.length > 0) {
-      blocks.push({
-        object: 'block',
-        type: 'paragraph',
-        paragraph: { rich_text: parseInlineMarkdown(paraLines.join('\n')) },
-      })
-    }
+    // Paragraph — one block per line to avoid huge strings
+    blocks.push({
+      object: 'block',
+      type: 'paragraph',
+      paragraph: { rich_text: parseInlineMarkdown(line) },
+    })
+    i++
   }
 
   return blocks
