@@ -509,6 +509,9 @@ class NotionService {
       bodyMd += '\n\n</details>'
     }
 
+    // Ensure DB is initialized (detects title property name) before building properties
+    await this.autoInit()
+
     const allBlocks = markdownToBlocks(bodyMd)
     const properties = this.buildProperties(article.frontmatter, article.path)
 
