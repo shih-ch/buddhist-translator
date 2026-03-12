@@ -167,14 +167,22 @@ export function markdownToBlocks(md: string): NotionBlock[] {
       }
       i++ // skip </details>
       const childBlocks = markdownToBlocks(toggleContent.join('\n'))
-      blocks.push({
+      // Notion limits children to 100 per block; store overflow for post-creation append
+      const first100 = childBlocks.slice(0, 100)
+      const overflow = childBlocks.slice(100)
+      const toggleBlock: NotionBlock = {
         object: 'block',
         type: 'toggle',
         toggle: {
           rich_text: parseInlineMarkdown(summary),
-          children: childBlocks.length > 0 ? childBlocks : undefined,
+          children: first100.length > 0 ? first100 : undefined,
         },
-      })
+      }
+      if (overflow.length > 0) {
+        // Tag for post-creation processing
+        ;(toggleBlock as Record<string, unknown>)._overflow = overflow
+      }
+      blocks.push(toggleBlock)
       continue
     }
 
@@ -516,6 +524,16 @@ class NotionService {
     }
 
     {
+      // Strip _overflow tags before sending (Notion API would reject unknown fields)
+      const overflowMap: Array<{ index: number; blocks: NotionBlock[] }> = []
+      for (let idx = 0; idx < allBlocks.length; idx++) {
+        const block = allBlocks[idx] as Record<string, unknown>
+        if (block._overflow) {
+          overflowMap.push({ index: idx, blocks: block._overflow as NotionBlock[] })
+          delete block._overflow
+        }
+      }
+
       // Create new page with first 100 blocks
       const firstBatch = allBlocks.slice(0, 100)
       const remaining = allBlocks.slice(100)
@@ -531,9 +549,14 @@ class NotionService {
       const data = await res.json()
       const pageId = data.id
 
-      // Append remaining blocks
+      // Append remaining top-level blocks
       if (remaining.length > 0) {
         await this.appendBlocksBatched(pageId, remaining)
+      }
+
+      // Append overflow children to toggle blocks
+      if (overflowMap.length > 0) {
+        await this.appendToggleOverflow(pageId, overflowMap)
       }
 
       return { pageId, url: data.url }
@@ -552,6 +575,29 @@ class NotionService {
         method: 'PATCH',
         body: JSON.stringify({ children: batch }),
       })
+    }
+  }
+
+  private async appendToggleOverflow(
+    pageId: string,
+    overflowMap: Array<{ index: number; blocks: NotionBlock[] }>
+  ): Promise<void> {
+    // Get page children to find the actual block IDs
+    let allPageBlocks: Array<{ id: string }> = []
+    let cursor: string | undefined
+    do {
+      const url = `/v1/blocks/${pageId}/children?page_size=100${cursor ? `&start_cursor=${cursor}` : ''}`
+      const res = await this.apiFetch(url)
+      const data = await res.json()
+      allPageBlocks = allPageBlocks.concat(data.results ?? [])
+      cursor = data.has_more ? data.next_cursor : undefined
+    } while (cursor)
+
+    for (const { index, blocks } of overflowMap) {
+      if (index < allPageBlocks.length) {
+        const toggleBlockId = allPageBlocks[index].id
+        await this.appendBlocksBatched(toggleBlockId, blocks)
+      }
     }
   }
 
