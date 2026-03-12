@@ -529,20 +529,14 @@ class NotionService {
     const existingPageId = await this.findPageByGitHubPath(article.path)
 
     if (existingPageId) {
-      // Update: clear existing blocks, then re-add
-      await this.clearPageBlocks(existingPageId)
-      // Update properties
+      // Archive old page, then create new one (much faster than deleting blocks one by one)
       await this.apiFetch(`/v1/pages/${existingPageId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ properties }),
+        body: JSON.stringify({ archived: true }),
       })
-      // Append blocks in batches
-      await this.appendBlocksBatched(existingPageId, allBlocks)
-      // Get page URL
-      const pageRes = await this.apiFetch(`/v1/pages/${existingPageId}`)
-      const pageData = await pageRes.json()
-      return { pageId: existingPageId, url: pageData.url }
-    } else {
+    }
+
+    {
       // Create new page with first 100 blocks
       const firstBatch = allBlocks.slice(0, 100)
       const remaining = allBlocks.slice(100)
@@ -579,33 +573,6 @@ class NotionService {
         method: 'PATCH',
         body: JSON.stringify({ children: batch }),
       })
-    }
-  }
-
-  private async clearPageBlocks(pageId: string): Promise<void> {
-    // Get all existing blocks
-    const res = await this.apiFetch(`/v1/blocks/${pageId}/children?page_size=100`)
-    const data = await res.json()
-    // Delete each block
-    for (const block of data.results ?? []) {
-      await this.apiFetch(`/v1/blocks/${block.id}`, { method: 'DELETE' })
-    }
-    // Handle pagination
-    if (data.has_more && data.next_cursor) {
-      await this.clearPageBlocksFrom(pageId, data.next_cursor)
-    }
-  }
-
-  private async clearPageBlocksFrom(pageId: string, cursor: string): Promise<void> {
-    const res = await this.apiFetch(
-      `/v1/blocks/${pageId}/children?page_size=100&start_cursor=${cursor}`
-    )
-    const data = await res.json()
-    for (const block of data.results ?? []) {
-      await this.apiFetch(`/v1/blocks/${block.id}`, { method: 'DELETE' })
-    }
-    if (data.has_more && data.next_cursor) {
-      await this.clearPageBlocksFrom(pageId, data.next_cursor)
     }
   }
 

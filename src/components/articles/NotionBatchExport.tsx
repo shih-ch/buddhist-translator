@@ -10,13 +10,15 @@ import {
 } from '@/components/ui/dialog'
 import { githubService } from '@/services/github'
 import { notionService } from '@/services/notion'
-import { parseMarkdown } from '@/services/markdownUtils'
 
 interface LogEntry {
   title: string
-  status: 'exporting' | 'success' | 'skipped' | 'error'
+  status: 'success' | 'skipped' | 'error'
   error?: string
 }
+
+/** Yield to the browser event loop so UI stays responsive */
+const yieldToMain = () => new Promise<void>((r) => setTimeout(r, 0))
 
 export function NotionBatchExport() {
   const [open, setOpen] = useState(false)
@@ -35,7 +37,6 @@ export function NotionBatchExport() {
     setCurrentTitle('')
 
     try {
-      // Fetch all articles from GitHub
       const articleSummaries = await githubService.listTranslations()
       setTotalArticles(articleSummaries.length)
 
@@ -45,70 +46,58 @@ export function NotionBatchExport() {
         return
       }
 
-      // Load full content for each article
       setPhase('exporting')
       const abortController = new AbortController()
       abortRef.current = abortController
 
-      const fullArticles: Array<{
-        path: string
-        frontmatter: import('@/types/article').ArticleFrontmatter
-        content: string
-        originalText?: string
-      }> = []
+      let success = 0
+      let skipped = 0
+      let failed = 0
 
+      // Process one article at a time: load from GitHub → push to Notion → yield
       for (let i = 0; i < articleSummaries.length; i++) {
         if (abortController.signal.aborted) break
-        setCurrentTitle(`載入中：${articleSummaries[i].title}`)
-        setCurrent(i)
+
+        const { title, path } = articleSummaries[i]
+        setCurrent(i + 1)
+        setCurrentTitle(title)
+
+        await yieldToMain()
+
         try {
-          const article = await githubService.loadTranslation(articleSummaries[i].path)
-          const parsed = parseMarkdown(
-            // Re-assemble to get clean frontmatter
-            article.content
-          )
-          fullArticles.push({
+          // Check if already in Notion (skip if exists)
+          const existingId = await notionService.findPageByGitHubPath(path)
+          if (existingId) {
+            skipped++
+            setLogs((prev) => [...prev, { title, status: 'skipped' }])
+            continue
+          }
+
+          // Load full article from GitHub
+          const article = await githubService.loadTranslation(path)
+
+          await yieldToMain()
+
+          // Push to Notion
+          await notionService.saveTranslation({
             path: article.path,
             frontmatter: article.frontmatter,
-            content: parsed.content || article.content,
-            originalText: parsed.originalText ?? article.originalText,
+            content: article.content,
+            originalText: article.originalText,
           })
-        } catch {
-          // If we can't load an article, skip it
-          setLogs((prev) => [
-            ...prev,
-            { title: articleSummaries[i].title, status: 'error', error: '載入失敗' },
-          ])
+
+          success++
+          setLogs((prev) => [...prev, { title, status: 'success' }])
+        } catch (err) {
+          failed++
+          const error = err instanceof Error ? err.message : 'Unknown error'
+          setLogs((prev) => [...prev, { title, status: 'error', error }])
         }
+
+        await yieldToMain()
       }
 
-      if (abortController.signal.aborted) {
-        setPhase('done')
-        setSummary({ success: 0, skipped: 0, failed: 0 })
-        return
-      }
-
-      // Batch export to Notion
-      const result = await notionService.batchExport(
-        fullArticles,
-        (progress) => {
-          setCurrent(progress.current)
-          setTotalArticles(progress.total)
-          setCurrentTitle(progress.title)
-          if (progress.status !== 'exporting') {
-            setLogs((prev) => [
-              ...prev,
-              { title: progress.title, status: progress.status, error: progress.error },
-            ])
-          }
-        },
-        (_path, error) => {
-          console.error(`[NotionBatchExport] ${_path}: ${error}`)
-        },
-        abortController.signal
-      )
-
-      setSummary(result)
+      setSummary({ success, skipped, failed })
       setPhase('done')
     } catch (err) {
       console.error('[NotionBatchExport]', err)
@@ -122,7 +111,7 @@ export function NotionBatchExport() {
   }
 
   const handleClose = (isOpen: boolean) => {
-    if (!isOpen && phase === 'exporting') return // Prevent closing during export
+    if (!isOpen && phase === 'exporting') return
     setOpen(isOpen)
     if (!isOpen) {
       setPhase('idle')
