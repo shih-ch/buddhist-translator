@@ -120,7 +120,8 @@ ${htmlContent}
     setSaving(true);
     try {
       const parsed = parseMarkdown(previewContent);
-      const mergedFrontmatter = { ...metadata, ...parsed.frontmatter };
+      const today = new Date().toISOString().split('T')[0];
+      const mergedFrontmatter = { ...metadata, ...parsed.frontmatter, date: today };
       const { path, sha } = await githubService.saveTranslation(
         {
           path: editingArticle?.path ?? '',
@@ -174,7 +175,8 @@ ${htmlContent}
   const handleSaveBoth = async () => {
     if (!previewContent) return;
     const parsed = parseMarkdown(previewContent);
-    const mergedFrontmatter = { ...metadata, ...parsed.frontmatter };
+    const today = new Date().toISOString().split('T')[0];
+    const mergedFrontmatter = { ...metadata, ...parsed.frontmatter, date: today };
 
     const tasks: Promise<{ target: string }>[] = [];
 
