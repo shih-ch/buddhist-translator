@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Trash2, FileText, Loader2 } from 'lucide-react'
+import { Trash2, FileText, Loader2, CheckCircle, AlertTriangle, Link2, MinusCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { githubService } from '@/services/github'
+import { notionService } from '@/services/notion'
 import { MantraEditor } from '@/components/translator/MantraEditor'
 import { assembleMarkdown, splitFrontmatter } from '@/services/markdownUtils'
 import { toast } from 'sonner'
@@ -35,12 +36,20 @@ const LANG_LABELS: Record<string, string> = {
   zh: '中文',
 }
 
+export type NotionBindStatus =
+  | { status: 'synced'; pageId: string; pageUrl: string }
+  | { status: 'unbound'; pageId: string; pageUrl: string }
+  | { status: 'mismatch'; pageId: string; pageUrl: string; notionPath: string }
+  | { status: 'no_notion' }
+
 interface ArticleListProps {
   articles: ArticleSummary[]
   onDelete?: (path: string, sha: string) => void
+  notionStatus?: Map<string, NotionBindStatus>
+  onStatusUpdate?: (path: string, next: NotionBindStatus) => void
 }
 
-export function ArticleList({ articles, onDelete }: ArticleListProps) {
+export function ArticleList({ articles, onDelete, notionStatus, onStatusUpdate }: ArticleListProps) {
   const navigate = useNavigate()
   const [deleteTarget, setDeleteTarget] = useState<ArticleSummary | null>(null)
   const [mantraTarget, setMantraTarget] = useState<{
@@ -49,6 +58,25 @@ export function ArticleList({ articles, onDelete }: ArticleListProps) {
   } | null>(null)
   const [loadingPath, setLoadingPath] = useState<string | null>(null)
   const [savingMantra, setSavingMantra] = useState(false)
+  const [bindingPath, setBindingPath] = useState<string | null>(null)
+
+  const handleQuickBind = async (article: ArticleSummary, status: NotionBindStatus) => {
+    if (status.status !== 'unbound') return
+    setBindingPath(article.path)
+    try {
+      await notionService.bindPageToGitHubPath(status.pageId, article.path)
+      toast.success(`已綁定：${article.title}`)
+      onStatusUpdate?.(article.path, {
+        status: 'synced',
+        pageId: status.pageId,
+        pageUrl: status.pageUrl,
+      })
+    } catch (err) {
+      toast.error(`綁定失敗：${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
+      setBindingPath(null)
+    }
+  }
 
   const openMantraEditor = async (path: string) => {
     setLoadingPath(path)
@@ -106,12 +134,15 @@ export function ArticleList({ articles, onDelete }: ArticleListProps) {
             <TableHead className="w-40">作者</TableHead>
             <TableHead className="w-28">日期</TableHead>
             <TableHead className="w-24">原文語言</TableHead>
+            {notionStatus && <TableHead className="w-28">Notion</TableHead>}
             <TableHead className="w-12" />
             {onDelete && <TableHead className="w-12" />}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {articles.map((a) => (
+          {articles.map((a) => {
+            const status = notionStatus?.get(a.path)
+            return (
             <TableRow
               key={a.path}
               className="cursor-pointer"
@@ -125,6 +156,58 @@ export function ArticleList({ articles, onDelete }: ArticleListProps) {
                   {LANG_LABELS[a.original_language] ?? a.original_language}
                 </Badge>
               </TableCell>
+              {notionStatus && (
+                <TableCell>
+                  {!status ? (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  ) : status.status === 'synced' ? (
+                    <a
+                      href={status.pageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 text-xs text-green-600 hover:underline"
+                      title="Notion 頁面已正確綁定"
+                    >
+                      <CheckCircle className="h-3.5 w-3.5" /> 已綁定
+                    </a>
+                  ) : status.status === 'unbound' ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-1.5 text-xs text-amber-600 hover:bg-amber-100/30"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleQuickBind(a, status)
+                      }}
+                      disabled={bindingPath === a.path}
+                      title={`Notion 頁存在但 GitHub Path 為空。點擊一鍵綁定。\n${status.pageUrl}`}
+                    >
+                      {bindingPath === a.path
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <><Link2 className="h-3.5 w-3.5 mr-1" />綁定</>}
+                    </Button>
+                  ) : status.status === 'mismatch' ? (
+                    <a
+                      href={status.pageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 text-xs text-amber-600 hover:underline"
+                      title={`Notion 上 GitHub Path 不一致：\n${status.notionPath}\n\n手動修：開啟 Notion 頁面把 GitHub Path 改成左方 article path`}
+                    >
+                      <AlertTriangle className="h-3.5 w-3.5" /> 不一致
+                    </a>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+                      title="Notion 中找不到相同標題的頁面（會在下次儲存時建立新頁）"
+                    >
+                      <MinusCircle className="h-3.5 w-3.5" /> 無對應
+                    </span>
+                  )}
+                </TableCell>
+              )}
               <TableCell>
                 <Button
                   variant="ghost"
@@ -158,7 +241,8 @@ export function ArticleList({ articles, onDelete }: ArticleListProps) {
                 </TableCell>
               )}
             </TableRow>
-          ))}
+            )
+          })}
         </TableBody>
       </Table>
 

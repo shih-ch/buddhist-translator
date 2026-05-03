@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link2, Loader2, CheckCircle, XCircle, AlertTriangle, Minus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -34,8 +34,18 @@ export function NotionBatchBind() {
 
   const [open, setOpen] = useState(false)
   const [running, setRunning] = useState(false)
+  const [loadingArticles, setLoadingArticles] = useState(false)
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
   const [results, setResults] = useState<BindResult[]>([])
+
+  // Articles aren't necessarily loaded when arriving on the Settings page
+  // — fetch them on dialog open so the start button isn't permanently disabled.
+  useEffect(() => {
+    if (open && articles.length === 0 && !loadingArticles) {
+      setLoadingArticles(true)
+      fetchArticles().finally(() => setLoadingArticles(false))
+    }
+  }, [open, articles.length, loadingArticles, fetchArticles])
 
   const summary = useMemo(() => {
     const counts = { bound: 0, already_set: 0, mismatch: 0, no_match: 0, error: 0 }
@@ -97,10 +107,12 @@ export function NotionBatchBind() {
           </DialogHeader>
 
           <div className="flex items-center justify-between gap-2 shrink-0">
-            <div className="text-sm text-muted-foreground">
-              GitHub 文章數：{articles.length}
+            <div className="text-sm text-muted-foreground flex items-center gap-2">
+              {loadingArticles
+                ? <><Loader2 className="h-3 w-3 animate-spin" />載入文章列表...</>
+                : `GitHub 文章數：${articles.length}`}
             </div>
-            <Button size="sm" onClick={handleRun} disabled={running || articles.length === 0}>
+            <Button size="sm" onClick={handleRun} disabled={running || loadingArticles || articles.length === 0}>
               {running ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Link2 className="mr-1 h-3 w-3" />}
               {running ? '處理中...' : '開始'}
             </Button>
