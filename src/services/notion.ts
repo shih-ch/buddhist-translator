@@ -109,6 +109,54 @@ function pushTextChunks(
 
 // ─── Markdown → Notion Blocks ───
 
+/** Count consecutive indented lines starting at `start` (≥2 spaces or tab) */
+function countIndentedLines(lines: string[], start: number): number {
+  let count = 0
+  while (start + count < lines.length && /^[ \t]{2,}\S/.test(lines[start + count])) {
+    count++
+  }
+  return count
+}
+
+/** Parse indented lines as nested list children (strip leading indent, recurse) */
+function collectIndentedChildren(lines: string[], start: number): NotionBlock[] {
+  const count = countIndentedLines(lines, start)
+  if (count === 0) return []
+
+  const children: NotionBlock[] = []
+  for (let j = 0; j < count; j++) {
+    const raw = lines[start + j].replace(/^[ \t]{2,}/, '')
+
+    const numMatch = raw.match(/^\d+\.\s+(.*)/)
+    if (numMatch) {
+      children.push({
+        object: 'block',
+        type: 'numbered_list_item',
+        numbered_list_item: { rich_text: parseInlineMarkdown(numMatch[1]) },
+      })
+      continue
+    }
+
+    if (/^[-*]\s+/.test(raw)) {
+      const text = raw.replace(/^[-*]\s+/, '')
+      children.push({
+        object: 'block',
+        type: 'bulleted_list_item',
+        bulleted_list_item: { rich_text: parseInlineMarkdown(text) },
+      })
+      continue
+    }
+
+    // Fallback: treat as paragraph
+    children.push({
+      object: 'block',
+      type: 'paragraph',
+      paragraph: { rich_text: parseInlineMarkdown(raw) },
+    })
+  }
+  return children
+}
+
 export function markdownToBlocks(md: string): NotionBlock[] {
   const blocks: NotionBlock[] = []
   const lines = md.split('\n')
@@ -294,24 +342,32 @@ export function markdownToBlocks(md: string): NotionBlock[] {
     // Bulleted list
     if (/^[-*]\s+/.test(line)) {
       const text = line.replace(/^[-*]\s+/, '')
+      const children = collectIndentedChildren(lines, i + 1)
       blocks.push({
         object: 'block',
         type: 'bulleted_list_item',
-        bulleted_list_item: { rich_text: parseInlineMarkdown(text) },
-      })
-      i++
+        bulleted_list_item: {
+          rich_text: parseInlineMarkdown(text),
+          ...(children.length > 0 ? { children } : {}),
+        },
+      } as NotionBlock)
+      i = i + 1 + countIndentedLines(lines, i + 1)
       continue
     }
 
     // Numbered list
     const numMatch = line.match(/^\d+\.\s+(.*)/)
     if (numMatch) {
+      const children = collectIndentedChildren(lines, i + 1)
       blocks.push({
         object: 'block',
         type: 'numbered_list_item',
-        numbered_list_item: { rich_text: parseInlineMarkdown(numMatch[1]) },
-      })
-      i++
+        numbered_list_item: {
+          rich_text: parseInlineMarkdown(numMatch[1]),
+          ...(children.length > 0 ? { children } : {}),
+        },
+      } as NotionBlock)
+      i = i + 1 + countIndentedLines(lines, i + 1)
       continue
     }
 
