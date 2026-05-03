@@ -125,6 +125,21 @@ export function ArticlesPageContent() {
     fetchResearchFiles()
   }, [fetchArticles, fetchResearchFiles])
 
+  // Auto-check Notion bindings once on first visit (when Notion is configured
+  // and articles are loaded). Subsequent refreshes via the button.
+  useEffect(() => {
+    if (
+      notionToken &&
+      notionDatabaseId &&
+      articles.length > 0 &&
+      notionStatus === null &&
+      !checkingNotion
+    ) {
+      handleCheckNotion()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notionToken, notionDatabaseId, articles.length])
+
   const authors = getAuthors()
   const months = useMemo(() => {
     const set = new Set<string>()
