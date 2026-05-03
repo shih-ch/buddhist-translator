@@ -30,6 +30,7 @@ export const AI_PROVIDERS: Record<AIProviderId, { name: string; models: AIModel[
   anthropic: {
     name: 'Anthropic',
     models: [
+      { id: 'claude-opus-4-7', name: 'Claude Opus 4.7', inputPrice: 5, outputPrice: 25 },
       { id: 'claude-opus-4-6', name: 'Claude Opus 4.6', inputPrice: 5, outputPrice: 25 },
       { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', inputPrice: 3, outputPrice: 15 },
       { id: 'claude-opus-4-5', name: 'Claude Opus 4.5', inputPrice: 5, outputPrice: 25 },
