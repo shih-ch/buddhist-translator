@@ -10,13 +10,20 @@ import { toast } from 'sonner';
 import React from 'react';
 import { exportPDF, exportDOCX } from '@/services/exportFormats';
 import { notionService } from '@/services/notion';
+import { preprocessMantraFences } from '@/services/mantraFormatter';
 
 async function renderMarkdownToHtml(markdown: string): Promise<string> {
   const ReactMarkdown = (await import('react-markdown')).default;
   const remarkGfm = (await import('remark-gfm')).default;
+  const rehypeRaw = (await import('rehype-raw')).default;
   const { renderToString } = await import('react-dom/server');
+  const processed = preprocessMantraFences(markdown);
   return renderToString(
-    React.createElement(ReactMarkdown, { remarkPlugins: [remarkGfm] }, markdown)
+    React.createElement(
+      ReactMarkdown,
+      { remarkPlugins: [remarkGfm], rehypePlugins: [rehypeRaw] },
+      processed
+    )
   );
 }
 
@@ -70,6 +77,15 @@ export function ExportBar() {
     summary { cursor: pointer; font-weight: bold; margin-bottom: 0.5rem; }
     details p { line-height: 1.8; margin: 0.5em 0; }
     blockquote { border-left: 3px solid #ddd; padding-left: 1rem; color: #666; }
+    .mantra-block { margin: 1.5rem 0; border: 1px solid #ddd; border-radius: 0.5rem; padding: 1rem; background: #fafafa; }
+    .mantra-block .mantra-title { margin: 0 0 0.75rem 0; font-size: 1.1rem; font-weight: 600; }
+    .mantra-block .mantra-table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; }
+    .mantra-block .mantra-table td { border: 1px solid #ccc; padding: 0.4rem 0.6rem; text-align: center; vertical-align: middle; font-size: 0.95em; line-height: 1.4; }
+    .mantra-block .mantra-table tr:nth-child(1) td { font-size: 1.1em; }
+    .mantra-block .mantra-table tr:nth-child(3) td { font-style: italic; font-weight: 500; }
+    .mantra-block .mantra-note { font-size: 0.65em; color: #888; vertical-align: sub; margin: 0 0.05em; }
+    .mantra-block .mantra-summary { margin: 0.75rem 0 0 0; padding: 0.5rem 0.75rem; border-left: 3px solid #888; background: #fff; font-style: italic; }
+    .mantra-block .mantra-notes { margin: 0.5rem 0 0 0; font-size: 0.85em; color: #888; }
   </style>
 </head>
 <body>

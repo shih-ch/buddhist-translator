@@ -122,3 +122,56 @@
     @apply bg-background text-foreground;
     }
 }
+
+/* Mantra block rendering — used in MarkdownPreview, HTML export, PDF */
+.mantra-block {
+  margin: 1.5rem 0;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: color-mix(in oklch, var(--muted) 30%, transparent);
+}
+.mantra-block .mantra-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.mantra-block .mantra-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+  table-layout: auto;
+}
+.mantra-block .mantra-table td {
+  border: 1px solid var(--border);
+  padding: 0.4rem 0.6rem;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 0.95em;
+  line-height: 1.4;
+}
+.mantra-block .mantra-table tr:nth-child(1) td {
+  font-size: 1.1em;
+}
+.mantra-block .mantra-table tr:nth-child(3) td {
+  font-style: italic;
+  font-weight: 500;
+}
+.mantra-block .mantra-note {
+  font-size: 0.65em;
+  color: var(--muted-foreground);
+  vertical-align: sub;
+  margin: 0 0.05em;
+}
+.mantra-block .mantra-summary {
+  margin: 0.75rem 0 0 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid color-mix(in oklch, var(--primary) 50%, transparent);
+  background: color-mix(in oklch, var(--background) 50%, transparent);
+  font-style: italic;
+}
+.mantra-block .mantra-notes {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.85em;
+  color: var(--muted-foreground);
+}
