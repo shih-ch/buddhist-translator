@@ -135,7 +135,14 @@ ${htmlContent}
     try {
       const parsed = parseMarkdown(previewContent);
       const today = new Date().toISOString().split('T')[0];
-      const mergedFrontmatter = { ...metadata, ...parsed.frontmatter, date: today };
+      // Keep the original date for existing articles so the path stays stable
+      // (and Notion can match the page by GitHub Path on next save). New
+      // articles default to today.
+      const isExisting = !!editingArticle?.path;
+      const date = isExisting
+        ? (parsed.frontmatter.date || metadata.date || today)
+        : today;
+      const mergedFrontmatter = { ...metadata, ...parsed.frontmatter, date };
       const { path, sha } = await githubService.saveTranslation(
         {
           path: editingArticle?.path ?? '',
@@ -190,7 +197,11 @@ ${htmlContent}
     if (!previewContent) return;
     const parsed = parseMarkdown(previewContent);
     const today = new Date().toISOString().split('T')[0];
-    const mergedFrontmatter = { ...metadata, ...parsed.frontmatter, date: today };
+    const isExisting = !!editingArticle?.path;
+    const date = isExisting
+      ? (parsed.frontmatter.date || metadata.date || today)
+      : today;
+    const mergedFrontmatter = { ...metadata, ...parsed.frontmatter, date };
 
     const tasks: Promise<{ target: string }>[] = [];
 
