@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Image, Upload, Loader2, X } from 'lucide-react'
+import { Image, Upload, Loader2, X, Sparkles, Cpu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -10,6 +10,20 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
+import { ocrWithClaude } from '@/services/ocr'
+
+type OCREngine = 'claude' | 'tesseract'
+
+const ENGINE_STORAGE_KEY = 'bt-ocr-engine'
+
+function loadEngine(): OCREngine {
+  try {
+    const v = localStorage.getItem(ENGINE_STORAGE_KEY)
+    return v === 'tesseract' ? 'tesseract' : 'claude'
+  } catch {
+    return 'claude'
+  }
+}
 
 interface OCRInputProps {
   onTextExtracted: (text: string) => void
@@ -25,10 +39,16 @@ const OCR_LANGUAGES = [
 
 export function OCRInput({ onTextExtracted }: OCRInputProps) {
   const [lang, setLang] = useState('rus')
+  const [engine, setEngineState] = useState<OCREngine>(loadEngine())
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const [loading, setLoading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const setEngine = (v: OCREngine) => {
+    setEngineState(v)
+    try { localStorage.setItem(ENGINE_STORAGE_KEY, v) } catch { /* ignore */ }
+  }
 
   const handleFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -62,15 +82,21 @@ export function OCRInput({ onTextExtracted }: OCRInputProps) {
     setProgress(0)
 
     try {
-      const Tesseract = await import('tesseract.js')
-      const result = await Tesseract.recognize(imageUrl, lang, {
-        logger: (m: { status: string; progress: number }) => {
-          if (m.status === 'recognizing text') {
-            setProgress(Math.round(m.progress * 100))
-          }
-        },
-      })
-      const text = result.data.text.trim()
+      let text = ''
+      if (engine === 'claude') {
+        text = (await ocrWithClaude(imageUrl, lang)).trim()
+      } else {
+        const Tesseract = await import('tesseract.js')
+        const result = await Tesseract.recognize(imageUrl, lang, {
+          logger: (m: { status: string; progress: number }) => {
+            if (m.status === 'recognizing text') {
+              setProgress(Math.round(m.progress * 100))
+            }
+          },
+        })
+        text = result.data.text.trim()
+      }
+
       if (!text) {
         toast.error('未能識別出文字')
         return
@@ -93,8 +119,24 @@ export function OCRInput({ onTextExtracted }: OCRInputProps) {
   return (
     <div className="flex flex-col gap-3 p-3" onPaste={handlePaste}>
       <div className="flex items-center gap-2">
+        <div className="w-32">
+          <Label className="text-xs text-muted-foreground">引擎</Label>
+          <Select value={engine} onValueChange={(v) => setEngine(v as OCREngine)}>
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="claude">
+                <span className="flex items-center gap-1"><Sparkles className="h-3 w-3" /> Claude</span>
+              </SelectItem>
+              <SelectItem value="tesseract">
+                <span className="flex items-center gap-1"><Cpu className="h-3 w-3" /> Tesseract</span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="flex-1">
-          <Label className="text-xs text-muted-foreground">OCR 語言</Label>
+          <Label className="text-xs text-muted-foreground">語言（提示 / Tesseract 必選）</Label>
           <Select value={lang} onValueChange={setLang}>
             <SelectTrigger className="h-8 text-sm">
               <SelectValue />
@@ -158,7 +200,7 @@ export function OCRInput({ onTextExtracted }: OCRInputProps) {
         </div>
       )}
 
-      {loading && (
+      {loading && engine === 'tesseract' && (
         <div className="space-y-1">
           <div className="h-2 rounded-full bg-muted overflow-hidden">
             <div
@@ -170,6 +212,11 @@ export function OCRInput({ onTextExtracted }: OCRInputProps) {
             識別中... {progress}%
           </p>
         </div>
+      )}
+      {loading && engine === 'claude' && (
+        <p className="text-xs text-muted-foreground text-center">
+          Claude 辨識中...
+        </p>
       )}
 
       <Button

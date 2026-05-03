@@ -11,6 +11,7 @@ import {
   DEFAULT_TRANSLATION_FORMATTING_PROMPT,
   DEFAULT_EXTRACT_MANTRA_PROMPT,
   DEFAULT_FORMAT_MANTRA_PROMPT,
+  DEFAULT_OCR_PROMPT,
 } from './defaultPrompts'
 import { usePromptHistoryStore } from './promptHistoryStore'
 import { DEFAULT_TRANSLATION_MODEL } from './aiModels'
@@ -105,6 +106,15 @@ const DEFAULT_FUNCTIONS: AIFunctionConfig[] = [
     model: 'gpt-4.1-mini',
     prompt: DEFAULT_FORMAT_MANTRA_PROMPT,
     defaultPrompt: DEFAULT_FORMAT_MANTRA_PROMPT,
+  },
+  {
+    id: 'ocr_image',
+    name: 'OCR 圖片辨識',
+    description: '用 Claude vision 從圖片擷取文字',
+    provider: 'anthropic',
+    model: 'claude-haiku-4-5-20251001',
+    prompt: DEFAULT_OCR_PROMPT,
+    defaultPrompt: DEFAULT_OCR_PROMPT,
   },
 ]
 

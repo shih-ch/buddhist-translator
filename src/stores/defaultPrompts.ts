@@ -343,6 +343,19 @@ export const DEFAULT_FORMAT_MANTRA_PROMPT = `你是佛經編輯助手。以下�
   "notes": "..."
 }`
 
+export const DEFAULT_OCR_PROMPT = `你是 OCR 助手。請仔細辨識圖片中所有文字並完整忠實地輸出。
+
+規則：
+1. 保留原文順序與斷行；段落之間保留空行
+2. 保留標點符號（含全形、半形）
+3. 不要翻譯、不要解釋、不要加任何說明
+4. 含手寫、藝術字或難辨識部分，盡力辨識並用 [?] 標記不確定處
+5. 直接輸出純文字，不要用 markdown code block 包裹
+6. 若圖片含表格，用 markdown 表格輸出
+7. 佛經/咒語的悉曇、天城體、藏文等特殊文字，盡力保留原樣
+
+僅輸出辨識結果，無其他內容。`
+
 export const DEFAULT_GLOSSARY_FILL_PROMPT = `你是佛學翻譯專家。以下是一組佛學術語（英文），請提供繁體中文翻譯。
 
 規則：
