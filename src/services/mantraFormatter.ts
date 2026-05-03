@@ -232,19 +232,34 @@ export function extractMantrasFromMarkdown(md: string): Mantra[] {
       i++
     }
   }
-  // Backward-compat: also pick up any ```mantra fences (older format).
-  const fenceResults = extractMantrasFromFences(md)
-  return [...result, ...fenceResults]
+  // Backward-compat: only fall back to legacy ```mantra fences if no native
+  // markdown mantras were found (avoid double-counting in mixed-format files).
+  if (result.length === 0) {
+    return extractMantrasFromFences(md)
+  }
+  return result
 }
 
 export function findMantraSection(md: string): { start: number; end: number } | null {
   const headingIdx = md.indexOf(SECTION_HEADING)
   if (headingIdx === -1) return null
   const after = md.slice(headingIdx + SECTION_HEADING.length)
-  const nextHeadingMatch = after.match(/\n## (?!真言整理)/)
-  const sectionEnd = nextHeadingMatch
-    ? headingIdx + SECTION_HEADING.length + (nextHeadingMatch.index ?? 0)
+
+  // Section ends at whichever comes first: next non-mantra h2 heading,
+  // a standalone --- separator (which precedes <details>/images appended
+  // by assembleMarkdown), or EOF.
+  const candidates: number[] = []
+
+  const nextH2 = after.match(/\n## (?!真言整理)/)
+  if (nextH2 && nextH2.index !== undefined) candidates.push(nextH2.index)
+
+  const separator = after.match(/\n---\s*\n/)
+  if (separator && separator.index !== undefined) candidates.push(separator.index)
+
+  const sectionEnd = candidates.length > 0
+    ? headingIdx + SECTION_HEADING.length + Math.min(...candidates)
     : md.length
+
   return { start: headingIdx, end: sectionEnd }
 }
 
