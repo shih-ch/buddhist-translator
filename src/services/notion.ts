@@ -586,10 +586,48 @@ class NotionService {
     await this.ensureDatabaseProperties()
   }
 
+  // ─── Bind existing page to a GitHub Path ───
+
+  /** Parse a Notion page URL or raw ID into a normalized UUID. */
+  parsePageId(input: string): string | null {
+    const trimmed = input.trim()
+    // Match a 32-hex-char tail (no dashes) — typical Notion URL format
+    const noDash = trimmed.match(/([a-f0-9]{32})(?:[?#]|$)/i)
+    if (noDash) {
+      const id = noDash[1].toLowerCase()
+      return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`
+    }
+    // Match a UUID with dashes
+    const uuid = trimmed.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i)
+    if (uuid) return uuid[1].toLowerCase()
+    return null
+  }
+
+  async bindPageToGitHubPath(pageInput: string, githubPath: string): Promise<{ pageId: string; url: string }> {
+    const pageId = this.parsePageId(pageInput)
+    if (!pageId) {
+      throw new Error('無法解析 Notion 頁面 ID。請貼完整 Notion URL 或 32 位 hex ID。')
+    }
+    await this.autoInit()
+    const res = await this.apiFetch(`/v1/pages/${pageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        properties: {
+          'GitHub Path': {
+            rich_text: [{ type: 'text', text: { content: githubPath } }],
+          },
+        },
+      }),
+    })
+    const data = await res.json()
+    return { pageId, url: data.url ?? '' }
+  }
+
   // ─── Database Query ───
 
   async findPageByGitHubPath(githubPath: string): Promise<string | null> {
     await this.autoInit()
+    console.log('[Notion] findPageByGitHubPath query:', JSON.stringify(githubPath))
     const res = await this.apiFetch(`/v1/databases/${this.databaseId}/query`, {
       method: 'POST',
       body: JSON.stringify({
@@ -601,7 +639,9 @@ class NotionService {
       }),
     })
     const data = await res.json()
+    console.log('[Notion] findPageByGitHubPath results:', data.results?.length ?? 0)
     if (data.results && data.results.length > 0) {
+      console.log('[Notion] matched page id:', data.results[0].id)
       return data.results[0].id
     }
     return null

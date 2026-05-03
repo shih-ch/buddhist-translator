@@ -1,6 +1,14 @@
 import { useState } from 'react';
-import { Download, Copy, Github, Check, Loader2, FileType, FileSpreadsheet, BookOpen } from 'lucide-react';
+import { Download, Copy, Github, Check, Loader2, FileType, FileSpreadsheet, BookOpen, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { useTranslatorStore } from '@/stores/translatorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { generateSlug, parseMarkdown } from '@/services/markdownUtils';
@@ -48,6 +56,9 @@ export function ExportBar() {
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingNotion, setSavingNotion] = useState(false);
+  const [bindOpen, setBindOpen] = useState(false);
+  const [bindUrl, setBindUrl] = useState('');
+  const [binding, setBinding] = useState(false);
 
   const handleDownloadMd = () => {
     if (!previewContent) return;
@@ -263,6 +274,31 @@ ${htmlContent}
     if (failures.length > 0) toast.error(`儲存失敗：${failures.join('; ')}`);
   };
 
+  const handleBindNotion = async () => {
+    if (!editingArticle?.path) {
+      toast.error('沒有正在編輯的文章 path');
+      return;
+    }
+    if (!bindUrl.trim()) {
+      toast.error('請貼上 Notion 頁面 URL 或 ID');
+      return;
+    }
+    setBinding(true);
+    try {
+      const { url } = await notionService.bindPageToGitHubPath(bindUrl, editingArticle.path);
+      toast.success(`已綁定，下次儲存將更新該頁`, {
+        description: url || undefined,
+        duration: 6000,
+      });
+      setBindOpen(false);
+      setBindUrl('');
+    } catch (err) {
+      toast.error(`綁定失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setBinding(false);
+    }
+  };
+
   const isSavingAny = saving || savingNotion;
 
   return (
@@ -300,6 +336,18 @@ ${htmlContent}
         >
           {savingNotion ? <Loader2 className="size-3 mr-1 animate-spin" /> : <BookOpen className="size-3 mr-1" />}
           Notion
+        </Button>
+      )}
+      {hasNotion && editingArticle?.path && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs"
+          onClick={() => setBindOpen(true)}
+          title="綁定到既有 Notion 頁面（保留原 URL）"
+        >
+          <Link2 className="size-3 mr-1" />
+          綁定
         </Button>
       )}
       <Button
@@ -353,6 +401,44 @@ ${htmlContent}
         {copied ? '已複製' : '複製'}
       </Button>
       <ImageUploader />
+
+      <Dialog open={bindOpen} onOpenChange={(v) => !binding && setBindOpen(v)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>綁定 Notion 頁面</DialogTitle>
+            <DialogDescription>
+              貼上 Notion 頁面的 URL（或 32 位 hex ID）。app 會把該頁的「GitHub Path」屬性設為目前文章路徑，下次儲存就會更新該頁、URL 不變。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <div className="text-xs text-muted-foreground">目前文章 path：</div>
+            <div className="text-xs font-mono bg-muted px-2 py-1 rounded break-all">
+              {editingArticle?.path || '(無)'}
+            </div>
+            <Input
+              placeholder="https://www.notion.so/..."
+              value={bindUrl}
+              onChange={(e) => setBindUrl(e.target.value)}
+              autoComplete="off"
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setBindOpen(false)}
+              disabled={binding}
+            >
+              取消
+            </Button>
+            <Button size="sm" onClick={handleBindNotion} disabled={binding || !bindUrl.trim()}>
+              {binding ? <Loader2 className="size-3 mr-1 animate-spin" /> : <Link2 className="size-3 mr-1" />}
+              綁定
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
