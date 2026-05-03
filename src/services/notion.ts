@@ -1,5 +1,11 @@
 import { useSettingsStore } from '@/stores/settingsStore'
 import type { ArticleFrontmatter } from '@/types/article'
+import type { Mantra } from '@/types/mantra'
+import {
+  parseMantraFence,
+  isPhoneticAnnotationLabel,
+  parsePhoneticParens,
+} from '@/services/mantraFormatter'
 
 // ─── Types ───
 
@@ -107,6 +113,85 @@ function pushTextChunks(
   }
 }
 
+// ─── Mantra → Notion Blocks ───
+
+function mantraCellRichText(text: string, isPhoneticRow: boolean): NotionRichText[] {
+  if (!isPhoneticRow || !/[()（）]/.test(text)) {
+    return [{ type: 'text', text: { content: text } }]
+  }
+  const parts = parsePhoneticParens(text)
+  const result: NotionRichText[] = []
+  for (const p of parts) {
+    if (p.text.length === 0) continue
+    if (p.kind === 'note') {
+      result.push({
+        type: 'text',
+        text: { content: `(${p.text})` },
+        annotations: { italic: true },
+      })
+    } else {
+      result.push({ type: 'text', text: { content: p.text } })
+    }
+  }
+  if (result.length === 0) result.push({ type: 'text', text: { content: '' } })
+  return result
+}
+
+function mantraToBlocks(mantra: Mantra): NotionBlock[] {
+  const blocks: NotionBlock[] = []
+
+  if (mantra.title.trim()) {
+    blocks.push({
+      object: 'block',
+      type: 'heading_3',
+      heading_3: { rich_text: parseInlineMarkdown(mantra.title) },
+    })
+  }
+
+  if (mantra.rows.length > 0 && mantra.segments.length > 0) {
+    const tableRows: NotionBlock[] = mantra.rows.map((row) => {
+      const isPhonetic = isPhoneticAnnotationLabel(row.label)
+      const cells: NotionRichText[][] = mantra.segments.map((seg) => {
+        const cellText = seg[row.label] ?? ''
+        return mantraCellRichText(cellText, isPhonetic)
+      })
+      return {
+        object: 'block',
+        type: 'table_row',
+        table_row: { cells },
+      }
+    })
+    blocks.push({
+      object: 'block',
+      type: 'table',
+      table: {
+        table_width: mantra.segments.length,
+        has_column_header: false,
+        has_row_header: false,
+        children: tableRows,
+      },
+    })
+  }
+
+  if (mantra.summary.trim()) {
+    blocks.push({
+      object: 'block',
+      type: 'quote',
+      quote: { rich_text: parseInlineMarkdown(mantra.summary) },
+    })
+  }
+
+  if (mantra.notes && mantra.notes.trim()) {
+    blocks.push({
+      object: 'block',
+      type: 'paragraph',
+      paragraph: { rich_text: parseInlineMarkdown(mantra.notes) },
+    })
+  }
+
+  return blocks
+}
+
 // ─── Markdown → Notion Blocks ───
 
 /** Count consecutive indented lines starting at `start` (≥2 spaces or tab) */
@@ -182,6 +267,17 @@ export function markdownToBlocks(md: string): NotionBlock[] {
       }
       i++ // skip closing ```
       const codeText = codeLines.join('\n')
+
+      // Special: mantra fence → heading_3 + table + quote
+      if (lang === 'mantra') {
+        const mantra = parseMantraFence(codeText)
+        if (mantra) {
+          for (const b of mantraToBlocks(mantra)) blocks.push(b)
+          continue
+        }
+        // Malformed: fall through to render as plain code block
+      }
+
       // Split code into 2000-char chunks
       const richTexts: NotionRichText[] = []
       for (let j = 0; j < codeText.length; j += RICH_TEXT_LIMIT) {
