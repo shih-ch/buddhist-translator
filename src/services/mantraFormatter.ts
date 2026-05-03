@@ -2,7 +2,7 @@ import { useAIFunctionsStore } from '@/stores/aiFunctionsStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { trackedCallFunction } from '@/services/ai/trackedCall'
 import type { AIMessage } from '@/services/ai/types'
-import type { Mantra, ExtractMantraResponse } from '@/types/mantra'
+import type { Mantra, MantraRow, ExtractMantraResponse } from '@/types/mantra'
 
 const FENCE_RE = /^```mantra\s*\n([\s\S]*?)\n```$/gm
 const SECTION_HEADING = '## 真言整理'
@@ -34,14 +34,155 @@ export function parsePhoneticParens(text: string): Array<{ kind: 'main' | 'note'
   return result
 }
 
+// ─── Serialization (native markdown) ───
+
+function escapeMdCell(s: string): string {
+  return s.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ')
+}
+
 export function serializeMantra(mantra: Mantra): string {
-  const json = JSON.stringify(mantra, null, 2)
-  return '```mantra\n' + json + '\n```'
+  const lines: string[] = []
+  if (mantra.title.trim()) {
+    lines.push(`### ${mantra.title.trim()}`)
+    lines.push('')
+  }
+
+  if (mantra.rows.length > 0 && mantra.segments.length > 0) {
+    const numSeg = mantra.segments.length
+    const allRows = mantra.rows.map((row) => [
+      escapeMdCell(row.label),
+      ...mantra.segments.map((seg) => escapeMdCell(seg[row.label] ?? '')),
+    ])
+    // Markdown requires a header row. Use the first row as header — visually
+    // first-row-as-header is acceptable (悉曇/天城體 etc. usually goes first).
+    lines.push(`| ${allRows[0].join(' | ')} |`)
+    const sep = [':-', ...Array.from({ length: numSeg }, () => ':-:')]
+    lines.push(`| ${sep.join(' | ')} |`)
+    for (let i = 1; i < allRows.length; i++) {
+      lines.push(`| ${allRows[i].join(' | ')} |`)
+    }
+    lines.push('')
+  }
+
+  if (mantra.summary.trim()) {
+    for (const line of mantra.summary.trim().split('\n')) {
+      lines.push(`> ${line}`)
+    }
+    lines.push('')
+  }
+
+  if (mantra.notes && mantra.notes.trim()) {
+    lines.push(mantra.notes.trim())
+    lines.push('')
+  }
+
+  return lines.join('\n').trimEnd()
 }
 
 export function serializeMantras(mantras: Mantra[]): string {
   if (mantras.length === 0) return ''
   return mantras.map((m) => serializeMantra(m)).join('\n\n')
+}
+
+// ─── Parsing (native markdown + fence fallback) ───
+
+/** Parse contiguous markdown table lines starting at index. Returns parsed
+ *  data rows (separator row excluded) and how many lines were consumed. */
+function parseMarkdownTable(
+  lines: string[],
+  startIdx: number
+): { rows: string[][]; consumed: number } | null {
+  const tableLines: string[] = []
+  let i = startIdx
+  while (
+    i < lines.length &&
+    lines[i].trim().startsWith('|') &&
+    lines[i].trim().endsWith('|')
+  ) {
+    tableLines.push(lines[i])
+    i++
+  }
+  if (tableLines.length < 2) return null
+
+  const rows = tableLines
+    .filter((l) => !/^\|\s*[-:]+\s*(\|\s*[-:]+\s*)*\|$/.test(l.trim()))
+    .map((line) =>
+      line
+        .trim()
+        .split('|')
+        .slice(1, -1)
+        .map((c) => c.trim().replace(/\\\|/g, '|'))
+    )
+
+  return { rows, consumed: i - startIdx }
+}
+
+function parseMantraGroup(
+  lines: string[],
+  startIdx: number
+): { mantra: Mantra; consumed: number } | null {
+  const titleMatch = lines[startIdx].match(/^###\s+(.*)$/)
+  if (!titleMatch) return null
+  const title = titleMatch[1].trim()
+
+  let i = startIdx + 1
+  while (i < lines.length && lines[i].trim() === '') i++
+
+  const rows: MantraRow[] = []
+  let segments: Array<Record<string, string>> = []
+
+  if (i < lines.length && lines[i].trim().startsWith('|')) {
+    const table = parseMarkdownTable(lines, i)
+    if (table && table.rows.length > 0) {
+      i += table.consumed
+      const numCols = table.rows[0].length
+      const numSegments = Math.max(numCols - 1, 0)
+      segments = Array.from({ length: numSegments }, () => ({}))
+      for (const row of table.rows) {
+        const label = (row[0] ?? '').trim()
+        if (!label) continue
+        rows.push({ label })
+        for (let s = 0; s < numSegments; s++) {
+          segments[s][label] = (row[s + 1] ?? '').trim()
+        }
+      }
+    }
+  }
+
+  while (i < lines.length && lines[i].trim() === '') i++
+
+  let summary = ''
+  if (i < lines.length && lines[i].startsWith('> ')) {
+    const quoteLines: string[] = []
+    while (i < lines.length && lines[i].startsWith('> ')) {
+      quoteLines.push(lines[i].slice(2))
+      i++
+    }
+    summary = quoteLines.join('\n').trim()
+  }
+
+  while (i < lines.length && lines[i].trim() === '') i++
+
+  const notesLines: string[] = []
+  while (
+    i < lines.length &&
+    !lines[i].startsWith('### ') &&
+    !lines[i].startsWith('## ')
+  ) {
+    if (lines[i].trim() === '') {
+      if (notesLines.length > 0) break
+      i++
+      continue
+    }
+    notesLines.push(lines[i])
+    i++
+  }
+  const notes = notesLines.join('\n').trim()
+
+  return {
+    mantra: { title, rows, segments, summary, notes },
+    consumed: i - startIdx,
+  }
 }
 
 export function parseMantraFence(fenceContent: string): Mantra | null {
@@ -61,7 +202,7 @@ export function parseMantraFence(fenceContent: string): Mantra | null {
   }
 }
 
-export function extractMantrasFromMarkdown(md: string): Mantra[] {
+function extractMantrasFromFences(md: string): Mantra[] {
   const result: Mantra[] = []
   FENCE_RE.lastIndex = 0
   let m: RegExpExecArray | null
@@ -70,6 +211,30 @@ export function extractMantrasFromMarkdown(md: string): Mantra[] {
     if (mantra) result.push(mantra)
   }
   return result
+}
+
+export function extractMantrasFromMarkdown(md: string): Mantra[] {
+  const result: Mantra[] = []
+  const section = findMantraSection(md)
+  if (section) {
+    const sectionContent = md.slice(section.start + SECTION_HEADING.length, section.end)
+    const lines = sectionContent.split('\n')
+    let i = 0
+    while (i < lines.length) {
+      if (lines[i].startsWith('### ')) {
+        const parsed = parseMantraGroup(lines, i)
+        if (parsed) {
+          result.push(parsed.mantra)
+          i += Math.max(parsed.consumed, 1)
+          continue
+        }
+      }
+      i++
+    }
+  }
+  // Backward-compat: also pick up any ```mantra fences (older format).
+  const fenceResults = extractMantrasFromFences(md)
+  return [...result, ...fenceResults]
 }
 
 export function findMantraSection(md: string): { start: number; end: number } | null {
@@ -127,6 +292,8 @@ export function insertMantrasIntoMarkdown(
   return before + '\n\n' + block + '\n' + after
 }
 
+// ─── AI helpers ───
+
 function extractJsonFromResponse(text: string): string {
   let t = text.trim()
   const codeBlock = t.match(/```(?:json)?\s*([\s\S]*?)```/)
@@ -175,71 +342,6 @@ export async function formatMantra(mantra: Mantra): Promise<Mantra> {
 
   const text = extractJsonFromResponse(response.content)
   return JSON.parse(text) as Mantra
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
-function renderPhoneticCellHtml(text: string): string {
-  if (!/[()（）]/.test(text)) return escapeHtml(text)
-  const parts = parsePhoneticParens(text)
-  return parts
-    .map((p) =>
-      p.kind === 'note'
-        ? `<sub class="mantra-note">${escapeHtml(p.text)}</sub>`
-        : escapeHtml(p.text)
-    )
-    .join('')
-}
-
-export function mantraToHtml(mantra: Mantra): string {
-  const titleHtml = mantra.title.trim()
-    ? `<h3 class="mantra-title">${escapeHtml(mantra.title)}</h3>`
-    : ''
-
-  let tableHtml = ''
-  if (mantra.rows.length > 0 && mantra.segments.length > 0) {
-    const rowsHtml = mantra.rows
-      .map((row) => {
-        const isPhonetic = isPhoneticAnnotationLabel(row.label)
-        const cellsHtml = mantra.segments
-          .map((seg) => {
-            const cellText = seg[row.label] ?? ''
-            const inner = isPhonetic
-              ? renderPhoneticCellHtml(cellText)
-              : escapeHtml(cellText)
-            return `<td>${inner || '&nbsp;'}</td>`
-          })
-          .join('')
-        return `<tr>${cellsHtml}</tr>`
-      })
-      .join('')
-    tableHtml = `<table class="mantra-table"><tbody>${rowsHtml}</tbody></table>`
-  }
-
-  const summaryHtml = mantra.summary.trim()
-    ? `<blockquote class="mantra-summary">${escapeHtml(mantra.summary)}</blockquote>`
-    : ''
-
-  const notesHtml = mantra.notes && mantra.notes.trim()
-    ? `<p class="mantra-notes">${escapeHtml(mantra.notes)}</p>`
-    : ''
-
-  return `<section class="mantra-block">${titleHtml}${tableHtml}${summaryHtml}${notesHtml}</section>`
-}
-
-export function preprocessMantraFences(md: string): string {
-  return md.replace(FENCE_RE, (full, body: string) => {
-    const mantra = parseMantraFence(body)
-    if (!mantra) return full
-    return '\n\n' + mantraToHtml(mantra) + '\n\n'
-  })
 }
 
 export function emptyMantra(): Mantra {

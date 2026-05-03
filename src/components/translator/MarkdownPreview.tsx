@@ -3,7 +3,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { parseMarkdown } from '@/services/markdownUtils';
-import { preprocessMantraFences } from '@/services/mantraFormatter';
 import { useGlossaryStore } from '@/stores/glossaryStore';
 import { Button } from '@/components/ui/button';
 import { Highlighter } from 'lucide-react';
@@ -181,9 +180,6 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
   } catch {
     // Not parseable, just render as-is
   }
-
-  // Replace ```mantra fences with rendered HTML before passing to ReactMarkdown
-  body = preprocessMantraFences(body);
 
   const shouldHighlight = highlightEnabled && regex && termMap.size > 0;
 

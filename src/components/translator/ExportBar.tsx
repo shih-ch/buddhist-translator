@@ -10,19 +10,17 @@ import { toast } from 'sonner';
 import React from 'react';
 import { exportPDF, exportDOCX } from '@/services/exportFormats';
 import { notionService } from '@/services/notion';
-import { preprocessMantraFences } from '@/services/mantraFormatter';
 
 async function renderMarkdownToHtml(markdown: string): Promise<string> {
   const ReactMarkdown = (await import('react-markdown')).default;
   const remarkGfm = (await import('remark-gfm')).default;
   const rehypeRaw = (await import('rehype-raw')).default;
   const { renderToString } = await import('react-dom/server');
-  const processed = preprocessMantraFences(markdown);
   return renderToString(
     React.createElement(
       ReactMarkdown,
       { remarkPlugins: [remarkGfm], rehypePlugins: [rehypeRaw] },
-      processed
+      markdown
     )
   );
 }

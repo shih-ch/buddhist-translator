@@ -2,9 +2,9 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import type { ArticleFrontmatter } from '@/types/article'
 import type { Mantra } from '@/types/mantra'
 import {
-  parseMantraFence,
   isPhoneticAnnotationLabel,
   parsePhoneticParens,
+  extractMantrasFromMarkdown,
 } from '@/services/mantraFormatter'
 import { toast } from 'sonner'
 
@@ -257,6 +257,29 @@ export function markdownToBlocks(md: string): NotionBlock[] {
       continue
     }
 
+    // Special: ## 真言整理 section → emit heading_2 + structured mantra blocks
+    // (preserves the no-row-label table layout regardless of how the mantras
+    // are stored in markdown — native md tables or legacy ```mantra fences)
+    if (line.trim() === '## 真言整理') {
+      blocks.push({
+        object: 'block',
+        type: 'heading_2',
+        heading_2: { rich_text: parseInlineMarkdown('真言整理') },
+      })
+      // Slurp section content until next ## heading or EOF
+      let j = i + 1
+      while (j < lines.length && !/^##\s+(?!真言整理)/.test(lines[j])) {
+        j++
+      }
+      const sectionMd = '## 真言整理\n' + lines.slice(i + 1, j).join('\n')
+      const mantras = extractMantrasFromMarkdown(sectionMd)
+      for (const mantra of mantras) {
+        for (const b of mantraToBlocks(mantra)) blocks.push(b)
+      }
+      i = j
+      continue
+    }
+
     // Code block
     if (line.trimStart().startsWith('```')) {
       const lang = line.trim().slice(3).trim() || 'plain text'
@@ -268,16 +291,6 @@ export function markdownToBlocks(md: string): NotionBlock[] {
       }
       i++ // skip closing ```
       const codeText = codeLines.join('\n')
-
-      // Special: mantra fence → heading_3 + table + quote
-      if (lang === 'mantra') {
-        const mantra = parseMantraFence(codeText)
-        if (mantra) {
-          for (const b of mantraToBlocks(mantra)) blocks.push(b)
-          continue
-        }
-        // Malformed: fall through to render as plain code block
-      }
 
       // Split code into 2000-char chunks
       const richTexts: NotionRichText[] = []
