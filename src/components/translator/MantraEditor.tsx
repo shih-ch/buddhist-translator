@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Sparkles, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -379,7 +378,7 @@ export function MantraEditor({ open, onClose, currentMarkdown, onApply }: Mantra
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>真言整理</DialogTitle>
         </DialogHeader>
@@ -389,7 +388,7 @@ export function MantraEditor({ open, onClose, currentMarkdown, onApply }: Mantra
         </datalist>
 
         {/* Source selection */}
-        <div className="border rounded p-3 space-y-2">
+        <div className="border rounded p-3 space-y-2 shrink-0">
           <div className="flex items-center gap-3 text-sm">
             <Label className="text-xs font-medium">來源：</Label>
             <label className="flex items-center gap-1">
@@ -425,7 +424,7 @@ export function MantraEditor({ open, onClose, currentMarkdown, onApply }: Mantra
         </div>
 
         {/* Mantras list */}
-        <ScrollArea className="flex-1 pr-3">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-3 -mr-3">
           <div className="space-y-3 py-2">
             {mantras.length === 0 ? (
               <div className="text-center text-sm text-muted-foreground py-8">
@@ -445,10 +444,10 @@ export function MantraEditor({ open, onClose, currentMarkdown, onApply }: Mantra
               ))
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Footer */}
-        <div className="border-t pt-3 flex items-center justify-between gap-2">
+        <div className="border-t pt-3 flex items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-3 text-sm">
             <Label className="text-xs font-medium">插入位置：</Label>
             <label className="flex items-center gap-1">
