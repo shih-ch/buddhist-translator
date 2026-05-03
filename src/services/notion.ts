@@ -6,6 +6,7 @@ import {
   isPhoneticAnnotationLabel,
   parsePhoneticParens,
 } from '@/services/mantraFormatter'
+import { toast } from 'sonner'
 
 // ─── Types ───
 
@@ -667,55 +668,111 @@ class NotionService {
     const allBlocks = markdownToBlocks(bodyMd)
     const properties = this.buildProperties(article.frontmatter, article.path)
 
+    // Strip _overflow tags before sending (Notion API would reject unknown fields)
+    const overflowMap: Array<{ index: number; blocks: NotionBlock[] }> = []
+    for (let idx = 0; idx < allBlocks.length; idx++) {
+      const block = allBlocks[idx] as Record<string, unknown>
+      if (block._overflow) {
+        overflowMap.push({ index: idx, blocks: block._overflow as NotionBlock[] })
+        delete block._overflow
+      }
+    }
+
     // Check if page already exists
     const existingPageId = await this.findPageByGitHubPath(article.path)
 
     if (existingPageId) {
-      // Archive old page, then create new one (much faster than deleting blocks one by one)
-      await this.apiFetch(`/v1/pages/${existingPageId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ archived: true }),
-      })
+      // Update existing page in place: PATCH properties → delete child blocks → append new blocks.
+      // Preserves page ID, URL, and Notion-side comments.
+      return await this.updatePageInPlace(existingPageId, properties, allBlocks, overflowMap)
     }
 
-    {
-      // Strip _overflow tags before sending (Notion API would reject unknown fields)
-      const overflowMap: Array<{ index: number; blocks: NotionBlock[] }> = []
-      for (let idx = 0; idx < allBlocks.length; idx++) {
-        const block = allBlocks[idx] as Record<string, unknown>
-        if (block._overflow) {
-          overflowMap.push({ index: idx, blocks: block._overflow as NotionBlock[] })
-          delete block._overflow
+    // Create new page
+    const firstBatch = allBlocks.slice(0, 100)
+    const remaining = allBlocks.slice(100)
+
+    const res = await this.apiFetch('/v1/pages', {
+      method: 'POST',
+      body: JSON.stringify({
+        parent: { database_id: this.databaseId },
+        properties,
+        children: firstBatch,
+      }),
+    })
+    const data = await res.json()
+    const pageId = data.id
+
+    if (remaining.length > 0) {
+      await this.appendBlocksBatched(pageId, remaining)
+    }
+
+    if (overflowMap.length > 0) {
+      await this.appendToggleOverflow(pageId, overflowMap)
+    }
+
+    return { pageId, url: data.url }
+  }
+
+  // ─── Update existing page in place ───
+
+  private async updatePageInPlace(
+    pageId: string,
+    properties: Record<string, unknown>,
+    allBlocks: NotionBlock[],
+    overflowMap: Array<{ index: number; blocks: NotionBlock[] }>
+  ): Promise<{ pageId: string; url: string }> {
+    const toastId = `notion-update-${pageId}`
+
+    // 1. Update properties
+    toast.loading('更新 Notion 頁面屬性...', { id: toastId })
+    const pageRes = await this.apiFetch(`/v1/pages/${pageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ properties }),
+    })
+    const pageData = await pageRes.json()
+    const pageUrl = pageData.url as string
+
+    // 2. List existing top-level child blocks
+    let existingBlocks: Array<{ id: string }> = []
+    let cursor: string | undefined
+    do {
+      const url = `/v1/blocks/${pageId}/children?page_size=100${cursor ? `&start_cursor=${cursor}` : ''}`
+      const res = await this.apiFetch(url)
+      const data = await res.json()
+      existingBlocks = existingBlocks.concat(data.results ?? [])
+      cursor = data.has_more ? data.next_cursor : undefined
+    } while (cursor)
+
+    // 3. Delete existing blocks (one DELETE per block; rate-limited by apiFetch)
+    if (existingBlocks.length > 0) {
+      toast.loading(`正在刪除舊內容 0/${existingBlocks.length}...`, { id: toastId })
+      let deleted = 0
+      for (const b of existingBlocks) {
+        try {
+          await this.apiFetch(`/v1/blocks/${b.id}`, { method: 'DELETE' })
+        } catch (err) {
+          console.warn(`[Notion] Failed to delete block ${b.id}:`, err)
+        }
+        deleted++
+        if (deleted % 5 === 0 || deleted === existingBlocks.length) {
+          toast.loading(`正在刪除舊內容 ${deleted}/${existingBlocks.length}...`, { id: toastId })
         }
       }
-
-      // Create new page with first 100 blocks
-      const firstBatch = allBlocks.slice(0, 100)
-      const remaining = allBlocks.slice(100)
-
-      const res = await this.apiFetch('/v1/pages', {
-        method: 'POST',
-        body: JSON.stringify({
-          parent: { database_id: this.databaseId },
-          properties,
-          children: firstBatch,
-        }),
-      })
-      const data = await res.json()
-      const pageId = data.id
-
-      // Append remaining top-level blocks
-      if (remaining.length > 0) {
-        await this.appendBlocksBatched(pageId, remaining)
-      }
-
-      // Append overflow children to toggle blocks
-      if (overflowMap.length > 0) {
-        await this.appendToggleOverflow(pageId, overflowMap)
-      }
-
-      return { pageId, url: data.url }
     }
+
+    // 4. Append new blocks
+    toast.loading(`寫入新內容（${allBlocks.length} blocks）...`, { id: toastId })
+    if (allBlocks.length > 0) {
+      await this.appendBlocksBatched(pageId, allBlocks)
+    }
+
+    // 5. Toggle overflow
+    if (overflowMap.length > 0) {
+      await this.appendToggleOverflow(pageId, overflowMap)
+    }
+
+    toast.success('Notion 更新完成', { id: toastId })
+    return { pageId, url: pageUrl }
   }
 
   // ─── Block Operations ───
