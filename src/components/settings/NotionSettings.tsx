@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { notionService } from '@/services/notion'
+import { NotionBatchBind } from './NotionBatchBind'
 
 export function NotionSettings() {
   const {
@@ -131,6 +132,8 @@ export function NotionSettings() {
             <p className="text-xs text-red-600">{initMsg}</p>
           )}
         </div>
+
+        {notionToken && notionDatabaseId && <NotionBatchBind />}
       </CardContent>
     </Card>
   )

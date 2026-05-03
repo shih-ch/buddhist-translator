@@ -35,6 +35,13 @@ interface BatchProgress {
   error?: string
 }
 
+export type BindResult =
+  | { articleTitle: string; articlePath: string; status: 'bound'; pageUrl: string }
+  | { articleTitle: string; articlePath: string; status: 'already_set'; pageUrl: string }
+  | { articleTitle: string; articlePath: string; status: 'mismatch'; notionPath: string; pageUrl: string }
+  | { articleTitle: string; articlePath: string; status: 'no_match' }
+  | { articleTitle: string; articlePath: string; status: 'error'; error: string }
+
 // ─── Rate Limiter (3 req/sec) ───
 
 let lastRequestTime = 0
@@ -621,6 +628,92 @@ class NotionService {
     })
     const data = await res.json()
     return { pageId, url: data.url ?? '' }
+  }
+
+  // ─── Batch operations ───
+
+  async listAllPages(): Promise<Array<{ id: string; title: string; githubPath: string; url: string }>> {
+    await this.autoInit()
+    const pages: Array<{ id: string; title: string; githubPath: string; url: string }> = []
+    let cursor: string | undefined
+    do {
+      const body: Record<string, unknown> = { page_size: 100 }
+      if (cursor) body.start_cursor = cursor
+      const res = await this.apiFetch(`/v1/databases/${this.databaseId}/query`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      for (const page of data.results ?? []) {
+        const titleProp = page.properties?.[this.titlePropertyName]
+        const title = (titleProp?.title as Array<{ plain_text?: string }> | undefined)
+          ?.map((t) => t.plain_text ?? '')
+          .join('') ?? ''
+        const ghProp = page.properties?.['GitHub Path']
+        const githubPath = (ghProp?.rich_text as Array<{ plain_text?: string }> | undefined)
+          ?.map((t) => t.plain_text ?? '')
+          .join('') ?? ''
+        pages.push({ id: page.id as string, title, githubPath, url: page.url as string })
+      }
+      cursor = data.has_more ? data.next_cursor : undefined
+    } while (cursor)
+    return pages
+  }
+
+  async batchBindPages(
+    articles: Array<{ title: string; path: string }>,
+    onProgress: (current: number, total: number) => void,
+    onResult: (result: BindResult) => void
+  ): Promise<void> {
+    const pages = await this.listAllPages()
+    const pageByTitle = new Map<string, typeof pages[0]>()
+    for (const p of pages) {
+      if (!pageByTitle.has(p.title)) pageByTitle.set(p.title, p)
+    }
+
+    for (let i = 0; i < articles.length; i++) {
+      const article = articles[i]
+      onProgress(i + 1, articles.length)
+      const page = pageByTitle.get(article.title)
+      if (!page) {
+        onResult({ articleTitle: article.title, articlePath: article.path, status: 'no_match' })
+        continue
+      }
+      if (page.githubPath === article.path) {
+        onResult({ articleTitle: article.title, articlePath: article.path, status: 'already_set', pageUrl: page.url })
+        continue
+      }
+      if (page.githubPath && page.githubPath !== article.path) {
+        onResult({
+          articleTitle: article.title,
+          articlePath: article.path,
+          status: 'mismatch',
+          notionPath: page.githubPath,
+          pageUrl: page.url,
+        })
+        continue
+      }
+      try {
+        await this.apiFetch(`/v1/pages/${page.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            properties: {
+              'GitHub Path': {
+                rich_text: [{ type: 'text', text: { content: article.path } }],
+              },
+            },
+          }),
+        })
+        onResult({ articleTitle: article.title, articlePath: article.path, status: 'bound', pageUrl: page.url })
+      } catch (err) {
+        onResult({
+          articleTitle: article.title,
+          articlePath: article.path,
+          status: 'error',
+          error: err instanceof Error ? err.message : 'Unknown',
+        })
+      }
+    }
   }
 
   // ─── Database Query ───
