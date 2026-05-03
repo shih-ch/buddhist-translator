@@ -81,7 +81,9 @@ export function serializeMantra(mantra: Mantra): string {
 
 export function serializeMantras(mantras: Mantra[]): string {
   if (mantras.length === 0) return ''
-  return mantras.map((m) => serializeMantra(m)).join('\n\n')
+  // Separate multiple mantras with a horizontal rule so each is visually
+  // distinct on GitHub / preview / Notion.
+  return mantras.map((m) => serializeMantra(m)).join('\n\n---\n\n')
 }
 
 // ─── Parsing (native markdown + fence fallback) ───
@@ -167,7 +169,8 @@ function parseMantraGroup(
   while (
     i < lines.length &&
     !lines[i].startsWith('### ') &&
-    !lines[i].startsWith('## ')
+    !lines[i].startsWith('## ') &&
+    lines[i].trim() !== '---'  // standalone divider = next mantra boundary
   ) {
     if (lines[i].trim() === '') {
       if (notesLines.length > 0) break
@@ -245,16 +248,19 @@ export function findMantraSection(md: string): { start: number; end: number } | 
   if (headingIdx === -1) return null
   const after = md.slice(headingIdx + SECTION_HEADING.length)
 
-  // Section ends at whichever comes first: next non-mantra h2 heading,
-  // a standalone --- separator (which precedes <details>/images appended
-  // by assembleMarkdown), or EOF.
+  // Section ends at whichever comes first:
+  // - next non-mantra h2 heading
+  // - a --- separator that precedes <details> or an image (the appended
+  //   sections from assembleMarkdown). Plain --- between mantras inside
+  //   the section is NOT an end marker.
+  // - EOF
   const candidates: number[] = []
 
   const nextH2 = after.match(/\n## (?!真言整理)/)
   if (nextH2 && nextH2.index !== undefined) candidates.push(nextH2.index)
 
-  const separator = after.match(/\n---\s*\n/)
-  if (separator && separator.index !== undefined) candidates.push(separator.index)
+  const appendedBoundary = after.match(/\n---\s*\n+(?:<details>|!\[)/)
+  if (appendedBoundary && appendedBoundary.index !== undefined) candidates.push(appendedBoundary.index)
 
   const sectionEnd = candidates.length > 0
     ? headingIdx + SECTION_HEADING.length + Math.min(...candidates)
