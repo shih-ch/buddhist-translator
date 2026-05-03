@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { Loader2, Sparkles, BookMarked, Columns2, BookCheck, GitCompare, Bookmark, History } from 'lucide-react';
+import { Loader2, Sparkles, BookMarked, Columns2, BookCheck, GitCompare, Bookmark, History, FileText } from 'lucide-react';
+import { MantraEditor } from './MantraEditor';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -41,6 +42,7 @@ export function PreviewToolbar({
   const savedVersions = useTranslatorStore((s) => s.savedVersions);
 
   const [formatting, setFormatting] = useState(false);
+  const [mantraOpen, setMantraOpen] = useState(false);
 
   const handleAIFormat = useCallback(async () => {
     if (!previewContent) return;
@@ -180,6 +182,17 @@ export function PreviewToolbar({
           variant="ghost"
           size="sm"
           className="h-6 text-xs px-2"
+          onClick={() => setMantraOpen(true)}
+          title="整理真言"
+        >
+          <FileText className="size-3" />
+        </Button>
+      )}
+      {previewContent && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 text-xs px-2"
           onClick={() => saveVersion()}
           title="儲存版本"
         >
@@ -198,6 +211,12 @@ export function PreviewToolbar({
           <span className="ml-0.5 text-[10px]">{savedVersions.length}</span>
         )}
       </Button>
+      <MantraEditor
+        open={mantraOpen}
+        onClose={() => setMantraOpen(false)}
+        currentMarkdown={previewContent}
+        onApply={(newMd) => setPreviewContent(newMd)}
+      />
     </div>
   );
 }

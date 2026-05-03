@@ -1,8 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Trash2 } from 'lucide-react'
+import { Trash2, FileText, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { githubService } from '@/services/github'
+import { MantraEditor } from '@/components/translator/MantraEditor'
+import { assembleMarkdown, splitFrontmatter } from '@/services/markdownUtils'
+import { toast } from 'sonner'
+import type { Article } from '@/types/article'
 import {
   Table,
   TableBody,
@@ -38,6 +43,55 @@ interface ArticleListProps {
 export function ArticleList({ articles, onDelete }: ArticleListProps) {
   const navigate = useNavigate()
   const [deleteTarget, setDeleteTarget] = useState<ArticleSummary | null>(null)
+  const [mantraTarget, setMantraTarget] = useState<{
+    article: Article
+    fullMd: string
+  } | null>(null)
+  const [loadingPath, setLoadingPath] = useState<string | null>(null)
+  const [savingMantra, setSavingMantra] = useState(false)
+
+  const openMantraEditor = async (path: string) => {
+    setLoadingPath(path)
+    try {
+      const article = await githubService.loadTranslation(path)
+      const fullMd = assembleMarkdown(
+        article.frontmatter,
+        article.content,
+        article.originalText
+      )
+      setMantraTarget({ article, fullMd })
+    } catch (err) {
+      toast.error(`載入失敗：${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
+      setLoadingPath(null)
+    }
+  }
+
+  const handleMantraApply = async (newFullMd: string) => {
+    if (!mantraTarget) return
+    setSavingMantra(true)
+    try {
+      // Strip frontmatter and original-text <details> back into Article shape
+      const { body } = splitFrontmatter(newFullMd)
+      const detailsMatch = body.match(
+        /\n---\s*\n+<details>\s*\n<summary>原文\s*\(Original\)<\/summary>\s*\n([\s\S]*?)\n<\/details>/
+      )
+      const newContent = detailsMatch ? body.slice(0, detailsMatch.index!).trim() : body.trim()
+      const newOriginalText = detailsMatch ? detailsMatch[1].trim() : mantraTarget.article.originalText
+
+      await githubService.saveTranslation({
+        ...mantraTarget.article,
+        content: newContent,
+        originalText: newOriginalText,
+      })
+      toast.success('已寫回 GitHub')
+      setMantraTarget(null)
+    } catch (err) {
+      toast.error(`儲存失敗：${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
+      setSavingMantra(false)
+    }
+  }
 
   if (articles.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">無符合條件的文章</p>
@@ -52,6 +106,7 @@ export function ArticleList({ articles, onDelete }: ArticleListProps) {
             <TableHead className="w-40">作者</TableHead>
             <TableHead className="w-28">日期</TableHead>
             <TableHead className="w-24">原文語言</TableHead>
+            <TableHead className="w-12" />
             {onDelete && <TableHead className="w-12" />}
           </TableRow>
         </TableHeader>
@@ -69,6 +124,23 @@ export function ArticleList({ articles, onDelete }: ArticleListProps) {
                 <Badge variant="secondary">
                   {LANG_LABELS[a.original_language] ?? a.original_language}
                 </Badge>
+              </TableCell>
+              <TableCell>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openMantraEditor(a.path)
+                  }}
+                  disabled={loadingPath === a.path}
+                  title="整理真言"
+                >
+                  {loadingPath === a.path
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <FileText className="h-3.5 w-3.5" />}
+                </Button>
               </TableCell>
               {onDelete && (
                 <TableCell>
@@ -89,6 +161,15 @@ export function ArticleList({ articles, onDelete }: ArticleListProps) {
           ))}
         </TableBody>
       </Table>
+
+      {mantraTarget && (
+        <MantraEditor
+          open={true}
+          onClose={() => !savingMantra && setMantraTarget(null)}
+          currentMarkdown={mantraTarget.fullMd}
+          onApply={handleMantraApply}
+        />
+      )}
 
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
