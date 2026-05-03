@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import { Layout } from '@/components/layout/Layout'
 import { Toaster } from '@/components/ui/sonner'
+import { UnsupportedModelCheck } from '@/components/UnsupportedModelCheck'
 import DashboardPage from '@/pages/DashboardPage'
 import TranslatorPage from '@/pages/TranslatorPage'
 import ArticlesPage from '@/pages/ArticlesPage'
@@ -19,6 +20,7 @@ function App() {
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>
+      <UnsupportedModelCheck />
       <Toaster richColors position="top-right" />
     </>
   )
