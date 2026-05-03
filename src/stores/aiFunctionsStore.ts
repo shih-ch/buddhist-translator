@@ -9,6 +9,8 @@ import {
   DEFAULT_GLOSSARY_FILL_PROMPT,
   DEFAULT_SOURCE_FORMATTING_PROMPT,
   DEFAULT_TRANSLATION_FORMATTING_PROMPT,
+  DEFAULT_EXTRACT_MANTRA_PROMPT,
+  DEFAULT_FORMAT_MANTRA_PROMPT,
 } from './defaultPrompts'
 import { usePromptHistoryStore } from './promptHistoryStore'
 import { DEFAULT_TRANSLATION_MODEL } from './aiModels'
@@ -85,6 +87,24 @@ const DEFAULT_FUNCTIONS: AIFunctionConfig[] = [
     model: 'gemini-2.0-flash',
     prompt: DEFAULT_GLOSSARY_FILL_PROMPT,
     defaultPrompt: DEFAULT_GLOSSARY_FILL_PROMPT,
+  },
+  {
+    id: 'extract_mantra',
+    name: '真言抽取',
+    description: '從文章中辨識真言/咒語並產生結構化資料',
+    provider: 'openai',
+    model: 'gpt-4.1-mini',
+    prompt: DEFAULT_EXTRACT_MANTRA_PROMPT,
+    defaultPrompt: DEFAULT_EXTRACT_MANTRA_PROMPT,
+  },
+  {
+    id: 'format_mantra',
+    name: '真言重排',
+    description: '修正使用者編輯後的真言資料格式與排版',
+    provider: 'openai',
+    model: 'gpt-4.1-mini',
+    prompt: DEFAULT_FORMAT_MANTRA_PROMPT,
+    defaultPrompt: DEFAULT_FORMAT_MANTRA_PROMPT,
   },
 ]
 
