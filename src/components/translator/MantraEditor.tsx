@@ -11,8 +11,18 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Sparkles, Wand2 } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { toast } from 'sonner'
 import type { Mantra } from '@/types/mantra'
+import type { AIProviderId } from '@/types/settings'
 import {
   extractMantras,
   formatMantra,
@@ -22,7 +32,35 @@ import {
   emptyMantra,
   parsePhoneticParens,
   isPhoneticAnnotationLabel,
+  type ModelOverride,
 } from '@/services/mantraFormatter'
+import { AI_PROVIDERS } from '@/stores/aiModels'
+
+const MODEL_STORAGE_KEY = 'bt-mantra-model-override'
+const DEFAULT_MODEL_VALUE = '__default__'
+
+function modelKey(override: ModelOverride | null): string {
+  return override ? `${override.provider}::${override.model}` : DEFAULT_MODEL_VALUE
+}
+
+function parseModelKey(value: string): ModelOverride | null {
+  if (value === DEFAULT_MODEL_VALUE) return null
+  const [provider, model] = value.split('::')
+  if (!provider || !model) return null
+  return { provider: provider as AIProviderId, model }
+}
+
+function loadModelOverride(): ModelOverride | null {
+  try {
+    const raw = localStorage.getItem(MODEL_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as ModelOverride
+    if (parsed?.provider && parsed?.model) return parsed
+    return null
+  } catch {
+    return null
+  }
+}
 
 interface MantraEditorProps {
   open: boolean
@@ -58,11 +96,13 @@ function MantraCard({
   mantra,
   index,
   total,
+  modelOverride,
   onChange,
   onMove,
   onDelete,
 }: {
   mantra: Mantra
+  modelOverride: ModelOverride | null
   index: number
   total: number
   onChange: (m: Mantra) => void
@@ -131,7 +171,7 @@ function MantraCard({
   const handleAIFormat = async () => {
     setFormatting(true)
     try {
-      const formatted = await formatMantra(mantra)
+      const formatted = await formatMantra(mantra, modelOverride ?? undefined)
       onChange(formatted)
       toast.success('已重排此真言')
     } catch (err) {
@@ -288,6 +328,17 @@ export function MantraEditor({ open, onClose, currentMarkdown, onApply }: Mantra
   const [manualText, setManualText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [insertMode, setInsertMode] = useState<'append' | 'replace'>('replace')
+  const [modelOverride, setModelOverrideState] = useState<ModelOverride | null>(loadModelOverride())
+
+  const setModelOverride = (next: ModelOverride | null) => {
+    setModelOverrideState(next)
+    try {
+      if (next) localStorage.setItem(MODEL_STORAGE_KEY, JSON.stringify(next))
+      else localStorage.removeItem(MODEL_STORAGE_KEY)
+    } catch {
+      /* no-op */
+    }
+  }
 
   const hasExistingSection = useMemo(
     () => findMantraSection(currentMarkdown) !== null,
@@ -326,7 +377,7 @@ export function MantraEditor({ open, onClose, currentMarkdown, onApply }: Mantra
 
     setExtracting(true)
     try {
-      const extracted = await extractMantras(sourceText)
+      const extracted = await extractMantras(sourceText, modelOverride ?? undefined)
       if (extracted.length === 0) {
         toast.warning('沒有偵測到真言')
         return
@@ -412,6 +463,33 @@ export function MantraEditor({ open, onClose, currentMarkdown, onApply }: Mantra
               onChange={(e) => setManualText(e.target.value)}
             />
           )}
+          <div className="flex items-center gap-2 text-xs">
+            <Label className="text-xs font-medium">模型：</Label>
+            <Select
+              value={modelKey(modelOverride)}
+              onValueChange={(v) => setModelOverride(parseModelKey(v))}
+            >
+              <SelectTrigger className="h-7 text-xs flex-1 max-w-[280px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={DEFAULT_MODEL_VALUE}>
+                  使用設定預設（AI 功能 → 真言抽取/重排）
+                </SelectItem>
+                {(Object.keys(AI_PROVIDERS) as AIProviderId[]).map((pid) => (
+                  <SelectGroup key={pid}>
+                    <SelectLabel>{AI_PROVIDERS[pid].name}</SelectLabel>
+                    {AI_PROVIDERS[pid].models.map((m) => (
+                      <SelectItem key={`${pid}::${m.id}`} value={`${pid}::${m.id}`}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-muted-foreground">套用於抽取與重排</span>
+          </div>
           <div className="flex justify-between items-center">
             <Button size="sm" variant="default" onClick={handleExtract} disabled={extracting}>
               {extracting ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Sparkles className="h-3 w-3 mr-1" />}
@@ -437,6 +515,7 @@ export function MantraEditor({ open, onClose, currentMarkdown, onApply }: Mantra
                   mantra={m}
                   index={idx}
                   total={mantras.length}
+                  modelOverride={modelOverride}
                   onChange={(updated) => updateMantra(idx, updated)}
                   onMove={(dir) => moveMantra(idx, dir)}
                   onDelete={() => deleteMantra(idx)}

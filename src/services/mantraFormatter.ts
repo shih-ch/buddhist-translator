@@ -2,7 +2,13 @@ import { useAIFunctionsStore } from '@/stores/aiFunctionsStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { trackedCallFunction } from '@/services/ai/trackedCall'
 import type { AIMessage } from '@/services/ai/types'
+import type { AIProviderId } from '@/types/settings'
 import type { Mantra, MantraRow, ExtractMantraResponse } from '@/types/mantra'
+
+export interface ModelOverride {
+  provider: AIProviderId
+  model: string
+}
 
 const FENCE_RE = /^```mantra\s*\n([\s\S]*?)\n```$/gm
 const SECTION_HEADING = '## 真言整理'
@@ -322,9 +328,15 @@ function extractJsonFromResponse(text: string): string {
   return t
 }
 
-export async function extractMantras(sourceText: string): Promise<Mantra[]> {
+export async function extractMantras(
+  sourceText: string,
+  override?: ModelOverride
+): Promise<Mantra[]> {
   const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('extract_mantra')
   const apiKeys = useSettingsStore.getState().apiKeys
+
+  const provider = override?.provider ?? fnConfig.provider
+  const model = override?.model ?? fnConfig.model
 
   const messages: AIMessage[] = [
     { role: 'system', content: fnConfig.prompt },
@@ -335,7 +347,7 @@ export async function extractMantras(sourceText: string): Promise<Mantra[]> {
     fnConfig,
     apiKeys,
     messages,
-    { overrideProvider: fnConfig.provider, overrideModel: fnConfig.model },
+    { overrideProvider: provider, overrideModel: model },
     'extract_mantra'
   )
 
@@ -344,9 +356,15 @@ export async function extractMantras(sourceText: string): Promise<Mantra[]> {
   return parsed.mantras ?? []
 }
 
-export async function formatMantra(mantra: Mantra): Promise<Mantra> {
+export async function formatMantra(
+  mantra: Mantra,
+  override?: ModelOverride
+): Promise<Mantra> {
   const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('format_mantra')
   const apiKeys = useSettingsStore.getState().apiKeys
+
+  const provider = override?.provider ?? fnConfig.provider
+  const model = override?.model ?? fnConfig.model
 
   const messages: AIMessage[] = [
     { role: 'system', content: fnConfig.prompt },
@@ -357,7 +375,7 @@ export async function formatMantra(mantra: Mantra): Promise<Mantra> {
     fnConfig,
     apiKeys,
     messages,
-    { overrideProvider: fnConfig.provider, overrideModel: fnConfig.model },
+    { overrideProvider: provider, overrideModel: model },
     'format_mantra'
   )
 
