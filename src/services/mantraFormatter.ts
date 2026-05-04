@@ -46,6 +46,22 @@ function escapeMdCell(s: string): string {
   return s.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ')
 }
 
+/** Split mantra.segments into sub-arrays based on mantra.breaks. */
+export function splitSegmentsByBreaks(mantra: Mantra): Array<Array<Record<string, string>>> {
+  const total = mantra.segments.length
+  const breaks = (mantra.breaks ?? [])
+    .filter((b) => b > 0 && b < total)
+    .sort((a, b) => a - b)
+  const sections: Array<Array<Record<string, string>>> = []
+  let start = 0
+  for (const b of breaks) {
+    sections.push(mantra.segments.slice(start, b))
+    start = b
+  }
+  sections.push(mantra.segments.slice(start))
+  return sections.filter((s) => s.length > 0)
+}
+
 export function serializeMantra(mantra: Mantra): string {
   const lines: string[] = []
   if (mantra.title.trim()) {
@@ -54,20 +70,23 @@ export function serializeMantra(mantra: Mantra): string {
   }
 
   if (mantra.rows.length > 0 && mantra.segments.length > 0) {
-    const numSeg = mantra.segments.length
-    const allRows = mantra.rows.map((row) => [
-      escapeMdCell(row.label),
-      ...mantra.segments.map((seg) => escapeMdCell(seg[row.label] ?? '')),
-    ])
-    // Markdown requires a header row. Use the first row as header — visually
-    // first-row-as-header is acceptable (悉曇/天城體 etc. usually goes first).
-    lines.push(`| ${allRows[0].join(' | ')} |`)
-    const sep = [':-', ...Array.from({ length: numSeg }, () => ':-:')]
-    lines.push(`| ${sep.join(' | ')} |`)
-    for (let i = 1; i < allRows.length; i++) {
-      lines.push(`| ${allRows[i].join(' | ')} |`)
+    const sections = splitSegmentsByBreaks(mantra)
+    for (const sectionSegments of sections) {
+      const numSeg = sectionSegments.length
+      const allRows = mantra.rows.map((row) => [
+        escapeMdCell(row.label),
+        ...sectionSegments.map((seg) => escapeMdCell(seg[row.label] ?? '')),
+      ])
+      // Markdown requires a header row. Use the first row as header — visually
+      // first-row-as-header is acceptable (悉曇/天城體 etc. usually goes first).
+      lines.push(`| ${allRows[0].join(' | ')} |`)
+      const sep = [':-', ...Array.from({ length: numSeg }, () => ':-:')]
+      lines.push(`| ${sep.join(' | ')} |`)
+      for (let i = 1; i < allRows.length; i++) {
+        lines.push(`| ${allRows[i].join(' | ')} |`)
+      }
+      lines.push('')
     }
-    lines.push('')
   }
 
   if (mantra.summary.trim()) {
@@ -138,23 +157,39 @@ function parseMantraGroup(
 
   const rows: MantraRow[] = []
   let segments: Array<Record<string, string>> = []
+  const breaks: number[] = []
 
-  if (i < lines.length && lines[i].trim().startsWith('|')) {
+  // Collect multiple consecutive tables — each table is a section of one
+  // mantra (split for readability). Section boundaries become `breaks`.
+  while (true) {
+    while (i < lines.length && lines[i].trim() === '') i++
+    if (i >= lines.length || !lines[i].trim().startsWith('|')) break
+
     const table = parseMarkdownTable(lines, i)
-    if (table && table.rows.length > 0) {
-      i += table.consumed
-      const numCols = table.rows[0].length
-      const numSegments = Math.max(numCols - 1, 0)
-      segments = Array.from({ length: numSegments }, () => ({}))
-      for (const row of table.rows) {
-        const label = (row[0] ?? '').trim()
-        if (!label) continue
+    if (!table || table.rows.length === 0) break
+    i += table.consumed
+
+    const numCols = table.rows[0].length
+    const numSegments = Math.max(numCols - 1, 0)
+    if (numSegments === 0) continue
+
+    if (segments.length > 0) breaks.push(segments.length)
+
+    const newSegments: Array<Record<string, string>> = Array.from(
+      { length: numSegments },
+      () => ({})
+    )
+    for (const row of table.rows) {
+      const label = (row[0] ?? '').trim()
+      if (!label) continue
+      if (!rows.some((r) => r.label === label)) {
         rows.push({ label })
-        for (let s = 0; s < numSegments; s++) {
-          segments[s][label] = (row[s + 1] ?? '').trim()
-        }
+      }
+      for (let s = 0; s < numSegments; s++) {
+        newSegments[s][label] = (row[s + 1] ?? '').trim()
       }
     }
+    segments = [...segments, ...newSegments]
   }
 
   while (i < lines.length && lines[i].trim() === '') i++
@@ -189,7 +224,14 @@ function parseMantraGroup(
   const notes = notesLines.join('\n').trim()
 
   return {
-    mantra: { title, rows, segments, summary, notes },
+    mantra: {
+      title,
+      rows,
+      segments,
+      breaks: breaks.length > 0 ? breaks : undefined,
+      summary,
+      notes,
+    },
     consumed: i - startIdx,
   }
 }

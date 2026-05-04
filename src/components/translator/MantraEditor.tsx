@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Sparkles, Wand2 } from 'lucide-react'
+import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Sparkles, Wand2, SeparatorVertical } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -165,8 +165,24 @@ function MantraCard({
   }
 
   const deleteSegment = (segIdx: number) => {
-    onChange({ ...mantra, segments: mantra.segments.filter((_, i) => i !== segIdx) })
+    const segments = mantra.segments.filter((_, i) => i !== segIdx)
+    // Re-index breaks: any break > segIdx shifts down by 1; break == segIdx is dropped
+    const breaks = (mantra.breaks ?? [])
+      .filter((b) => b !== segIdx)
+      .map((b) => (b > segIdx ? b - 1 : b))
+    onChange({ ...mantra, segments, breaks: breaks.length > 0 ? breaks : undefined })
   }
+
+  const toggleBreakAt = (segIdx: number) => {
+    if (segIdx <= 0) return  // can't break at the very first segment
+    const current = mantra.breaks ?? []
+    const next = current.includes(segIdx)
+      ? current.filter((b) => b !== segIdx)
+      : [...current, segIdx].sort((a, b) => a - b)
+    onChange({ ...mantra, breaks: next.length > 0 ? next : undefined })
+  }
+
+  const breakSet = new Set(mantra.breaks ?? [])
 
   const handleAIFormat = async () => {
     setFormatting(true)
@@ -244,16 +260,42 @@ function MantraCard({
               <thead className="bg-muted/30">
                 <tr>
                   <th className="px-2 py-1 text-xs font-medium text-left whitespace-nowrap border-r">列 \ 段</th>
-                  {mantra.segments.map((_, sIdx) => (
-                    <th key={sIdx} className="px-2 py-1 text-xs font-medium text-center min-w-[140px] border-r">
-                      <div className="flex items-center justify-between gap-1">
-                        <span>S{sIdx + 1}</span>
-                        <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => deleteSegment(sIdx)}>
-                          <Trash2 className="h-3 w-3 text-destructive" />
-                        </Button>
-                      </div>
-                    </th>
-                  ))}
+                  {mantra.segments.map((_, sIdx) => {
+                    const hasBreak = breakSet.has(sIdx)
+                    return (
+                      <th
+                        key={sIdx}
+                        className={`px-2 py-1 text-xs font-medium text-center min-w-[140px] border-r ${
+                          hasBreak ? 'border-l-4 border-l-primary' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <Button
+                            size="icon"
+                            variant={hasBreak ? 'secondary' : 'ghost'}
+                            className="h-5 w-5"
+                            onClick={() => toggleBreakAt(sIdx)}
+                            disabled={sIdx === 0}
+                            title={
+                              sIdx === 0
+                                ? '第一段不能設分節'
+                                : hasBreak
+                                ? '取消分節'
+                                : '在此處分節（拆成下一個小表格）'
+                            }
+                          >
+                            <SeparatorVertical
+                              className={`h-3 w-3 ${hasBreak ? 'text-primary' : 'text-muted-foreground'}`}
+                            />
+                          </Button>
+                          <span>S{sIdx + 1}</span>
+                          <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => deleteSegment(sIdx)}>
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
+                        </div>
+                      </th>
+                    )
+                  })}
                   <th className="px-1">
                     <Button size="icon" variant="ghost" className="h-6 w-6" onClick={addSegment} title="新增段落">
                       <Plus className="h-3 w-3" />
@@ -268,7 +310,12 @@ function MantraCard({
                     <tr key={row.label}>
                       <td className="px-2 py-1 text-xs font-medium whitespace-nowrap border-r bg-muted/10">{row.label}</td>
                       {mantra.segments.map((seg, sIdx) => (
-                        <td key={sIdx} className="border-r p-1 align-top">
+                        <td
+                          key={sIdx}
+                          className={`border-r p-1 align-top ${
+                            breakSet.has(sIdx) ? 'border-l-4 border-l-primary' : ''
+                          }`}
+                        >
                           <Input
                             className="h-7 text-sm"
                             value={seg[row.label] ?? ''}
@@ -284,6 +331,11 @@ function MantraCard({
                 })}
               </tbody>
             </table>
+            {(mantra.breaks?.length ?? 0) > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                已分為 {(mantra.breaks?.length ?? 0) + 1} 個小表格（藍色豎線標示分節點）
+              </p>
+            )}
           </div>
         </div>
 

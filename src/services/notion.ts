@@ -5,6 +5,7 @@ import {
   isPhoneticAnnotationLabel,
   parsePhoneticParens,
   extractMantrasFromMarkdown,
+  splitSegmentsByBreaks,
 } from '@/services/mantraFormatter'
 import { toast } from 'sonner'
 
@@ -157,28 +158,31 @@ function mantraToBlocks(mantra: Mantra): NotionBlock[] {
   }
 
   if (mantra.rows.length > 0 && mantra.segments.length > 0) {
-    const tableRows: NotionBlock[] = mantra.rows.map((row) => {
-      const isPhonetic = isPhoneticAnnotationLabel(row.label)
-      const cells: NotionRichText[][] = mantra.segments.map((seg) => {
-        const cellText = seg[row.label] ?? ''
-        return mantraCellRichText(cellText, isPhonetic)
+    const sections = splitSegmentsByBreaks(mantra)
+    for (const sectionSegments of sections) {
+      const tableRows: NotionBlock[] = mantra.rows.map((row) => {
+        const isPhonetic = isPhoneticAnnotationLabel(row.label)
+        const cells: NotionRichText[][] = sectionSegments.map((seg) => {
+          const cellText = seg[row.label] ?? ''
+          return mantraCellRichText(cellText, isPhonetic)
+        })
+        return {
+          object: 'block',
+          type: 'table_row',
+          table_row: { cells },
+        }
       })
-      return {
+      blocks.push({
         object: 'block',
-        type: 'table_row',
-        table_row: { cells },
-      }
-    })
-    blocks.push({
-      object: 'block',
-      type: 'table',
-      table: {
-        table_width: mantra.segments.length,
-        has_column_header: false,
-        has_row_header: false,
-        children: tableRows,
-      },
-    })
+        type: 'table',
+        table: {
+          table_width: sectionSegments.length,
+          has_column_header: false,
+          has_row_header: false,
+          children: tableRows,
+        },
+      })
+    }
   }
 
   if (mantra.summary.trim()) {
