@@ -184,6 +184,13 @@ function MantraCard({
 
   const breakSet = new Set(mantra.breaks ?? [])
 
+  // Per-segment fill stats: how many of mantra.rows have a non-empty value
+  // in this segment. Used to flag potentially misaligned segments.
+  const segmentFillCounts = mantra.segments.map((seg) =>
+    mantra.rows.reduce((acc, r) => acc + ((seg[r.label] ?? '').trim() ? 1 : 0), 0)
+  )
+  const totalRows = mantra.rows.length
+
   const handleAIFormat = async () => {
     setFormatting(true)
     try {
@@ -262,12 +269,14 @@ function MantraCard({
                   <th className="px-2 py-1 text-xs font-medium text-left whitespace-nowrap border-r">列 \ 段</th>
                   {mantra.segments.map((_, sIdx) => {
                     const hasBreak = breakSet.has(sIdx)
+                    const filled = segmentFillCounts[sIdx]
+                    const partial = filled > 0 && filled < totalRows
                     return (
                       <th
                         key={sIdx}
                         className={`px-2 py-1 text-xs font-medium text-center min-w-[140px] border-r ${
                           hasBreak ? 'border-l-4 border-l-primary' : ''
-                        }`}
+                        } ${partial ? 'bg-amber-50 dark:bg-amber-950/30' : ''}`}
                       >
                         <div className="flex items-center justify-between gap-1">
                           <Button
@@ -288,7 +297,12 @@ function MantraCard({
                               className={`h-3 w-3 ${hasBreak ? 'text-primary' : 'text-muted-foreground'}`}
                             />
                           </Button>
-                          <span>S{sIdx + 1}</span>
+                          <span
+                            className={partial ? 'text-amber-700 dark:text-amber-400' : ''}
+                            title={partial ? `對齊未完整：${filled}/${totalRows} rows 有內容` : `對齊完整：${filled}/${totalRows}`}
+                          >
+                            S{sIdx + 1}{partial ? ' ⚠' : ''}
+                          </span>
                           <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => deleteSegment(sIdx)}>
                             <Trash2 className="h-3 w-3 text-destructive" />
                           </Button>
@@ -331,11 +345,16 @@ function MantraCard({
                 })}
               </tbody>
             </table>
-            {(mantra.breaks?.length ?? 0) > 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                已分為 {(mantra.breaks?.length ?? 0) + 1} 個小表格（藍色豎線標示分節點）
-              </p>
-            )}
+            <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+              {(mantra.breaks?.length ?? 0) > 0 && (
+                <p>已分為 {(mantra.breaks?.length ?? 0) + 1} 個小表格（藍色豎線標示分節點）</p>
+              )}
+              {segmentFillCounts.some((c) => c > 0 && c < totalRows) && (
+                <p className="text-amber-700 dark:text-amber-400">
+                  ⚠ 有 {segmentFillCounts.filter((c) => c > 0 && c < totalRows).length} 個 segment 對齊未完整（標題列以黃底標示）。可手動補齊或按「AI 重排這個真言」自動修正對齊。
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
