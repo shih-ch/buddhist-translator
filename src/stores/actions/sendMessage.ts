@@ -1,5 +1,5 @@
 import type { TranslatorStoreGet, TranslatorStoreSet } from '../translatorStore';
-import type { AIMessage } from '@/services/ai/types';
+import type { AIMessage, AIResponse } from '@/services/ai/types';
 import { callFunction } from '@/services/ai/router';
 import { buildTranslationMessages, buildRetranslationMessages } from '@/services/ai/promptBuilder';
 import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
@@ -12,6 +12,34 @@ let messageCounter = 0;
 export function genId() {
   return `msg-${++messageCounter}-${Date.now()}`;
 }
+
+const NETWORK_ERROR_RE = /network error|failed to fetch|load failed|networkerror/i;
+
+/** User pressed stop / the request was aborted — not a real failure. */
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && (err.name === 'AbortError' || /abort/i.test(err.message));
+}
+
+/** Transient errors worth retrying: connection drops + rate-limit / 5xx. */
+function isRetryableError(err: unknown): boolean {
+  if (isAbortError(err)) return false;
+  if (!(err instanceof Error)) return false;
+  if (NETWORK_ERROR_RE.test(err.message)) return true;
+  // Adapter errors look like "OpenAI API error (429): ..."
+  const status = Number(err.message.match(/\((\d{3})\)/)?.[1]);
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+/** Turn a raw fetch/stream error into a message the user can act on. */
+function describeError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  if (NETWORK_ERROR_RE.test(raw)) {
+    return '網路連線中斷（串流可能被中途中斷）。已自動重試仍失敗，請檢查網路後按「重新翻譯」再試一次。';
+  }
+  return raw;
+}
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function performSendMessage(content: string, get: TranslatorStoreGet, set: TranslatorStoreSet): Promise<void> {
   const state = get();
@@ -52,6 +80,22 @@ export async function performSendMessage(content: string, get: TranslatorStoreGe
     isLoading: true,
     abortController,
   }));
+
+  // Content streamed in the current attempt — kept at function scope so the
+  // catch block can preserve partial output when a request ultimately fails.
+  let streamedContent = '';
+
+  // Overwrite the assistant placeholder's content (used by streaming + banners).
+  const setAssistantContent = (text: string) => {
+    set((s) => {
+      const msgs = [...s.messages];
+      const last = msgs[msgs.length - 1];
+      if (last.id === assistantMsg.id) {
+        msgs[msgs.length - 1] = { ...last, content: text };
+      }
+      return { messages: msgs };
+    });
+  };
 
   try {
     // Build messages using promptBuilder
@@ -147,30 +191,44 @@ export async function performSendMessage(content: string, get: TranslatorStoreGe
     const inputPrice = modelInfo?.inputPrice ?? 2.5;
     const outputPrice = modelInfo?.outputPrice ?? 10;
 
-    const response = await callFunction(
-      fnConfig,
-      apiKeys,
-      messages,
-      {
-        overrideProvider: state.currentModel.provider,
-        overrideModel: state.currentModel.model,
-        signal: abortController.signal,
-        stream: {
-          onChunk: (chunk) => {
-            set((s) => {
-              const msgs = [...s.messages];
-              const last = msgs[msgs.length - 1];
-              if (last.id === assistantMsg.id) {
-                msgs[msgs.length - 1] = { ...last, content: last.content + chunk };
-              }
-              return { messages: msgs };
-            });
-          },
-          onDone: () => {},
-          onError: () => {},
-        },
+    // Stream the translation, auto-retrying transient failures (connection
+    // drops / 429 / 5xx). Each attempt starts from a clean slate so retries
+    // never append onto a previous attempt's partial output.
+    const MAX_ATTEMPTS = 3;
+    let response: AIResponse | undefined;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      streamedContent = '';
+      setAssistantContent(attempt > 1 ? `⏳ 連線中斷，重試中（${attempt}/${MAX_ATTEMPTS}）…` : '');
+      try {
+        response = await callFunction(
+          fnConfig,
+          apiKeys,
+          messages,
+          {
+            overrideProvider: state.currentModel.provider,
+            overrideModel: state.currentModel.model,
+            signal: abortController.signal,
+            stream: {
+              onChunk: (chunk) => {
+                streamedContent += chunk;
+                setAssistantContent(streamedContent);
+              },
+              onDone: () => {},
+              onError: () => {},
+            },
+          }
+        );
+        break; // success
+      } catch (err) {
+        if (attempt < MAX_ATTEMPTS && isRetryableError(err)) {
+          console.warn(`[sendMessage] attempt ${attempt}/${MAX_ATTEMPTS} failed, retrying:`, err);
+          await delay(400 * attempt); // linear backoff
+          continue;
+        }
+        throw err; // aborted, non-retryable, or out of attempts
       }
-    );
+    }
+    if (!response) throw new Error('翻譯失敗：未取得回應');
 
     // Update final message with usage info
     const callCost = (response.usage.prompt_tokens * inputPrice +
@@ -202,13 +260,23 @@ export async function performSendMessage(content: string, get: TranslatorStoreGe
     });
   } catch (err) {
     console.error('[sendMessage] API call error:', err);
-    // Add error message to chat
+    const aborted = isAbortError(err);
+    const partial = streamedContent.trim();
     set((s) => {
       const msgs = [...s.messages];
       const last = msgs[msgs.length - 1];
       if (last.id === assistantMsg.id) {
-        const errorText = err instanceof Error ? err.message : 'Unknown error';
-        msgs[msgs.length - 1] = { ...last, content: `**Error:** ${errorText}` };
+        let content: string;
+        if (aborted) {
+          // User stopped the request — keep whatever streamed, note the stop.
+          content = partial ? `${streamedContent}\n\n_（已停止）_` : '_（已停止）_';
+        } else if (partial) {
+          // Genuine failure but we have partial output — preserve it, append note.
+          content = `${streamedContent}\n\n> ⚠️ ${describeError(err)}`;
+        } else {
+          content = `**Error:** ${describeError(err)}`;
+        }
+        msgs[msgs.length - 1] = { ...last, content };
       }
       return { messages: msgs, isLoading: false, abortController: null };
     });
