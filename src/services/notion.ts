@@ -63,7 +63,7 @@ function parseInlineMarkdown(text: string): NotionRichText[] {
   const result: NotionRichText[] = []
 
   // Fast path: no formatting characters → plain text
-  if (!/[*`~\[]/.test(text)) {
+  if (!/[*`~[]/.test(text)) {
     pushTextChunks(result, text, {})
     if (result.length === 0) result.push({ type: 'text', text: { content: '' } })
     return result
@@ -723,6 +723,13 @@ class NotionService {
   // ─── Database Query ───
 
   async findPageByGitHubPath(githubPath: string): Promise<string | null> {
+    // An empty/blank path is not a valid identity. Notion's rich_text
+    // `equals: ""` matches ANY page whose "GitHub Path" is empty, which would
+    // make a brand-new article overwrite an unrelated page. Never match on it.
+    if (!githubPath || !githubPath.trim()) {
+      console.warn('[Notion] findPageByGitHubPath called with empty path — skipping match')
+      return null
+    }
     await this.autoInit()
     console.log('[Notion] findPageByGitHubPath query:', JSON.stringify(githubPath))
     const res = await this.apiFetch(`/v1/databases/${this.databaseId}/query`, {

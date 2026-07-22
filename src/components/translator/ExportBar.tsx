@@ -216,40 +216,53 @@ ${htmlContent}
 
     const tasks: Promise<{ target: string }>[] = [];
 
+    // GitHub produces the canonical path. Capture it so Notion can bind to the
+    // correct "GitHub Path" — critical for new articles, whose path only exists
+    // after the GitHub save. Without this, Notion runs with an empty path and
+    // may overwrite an unrelated page.
+    let githubPathPromise: Promise<string> | null = null;
+
     if (githubToken) {
       setSaving(true);
-      tasks.push(
-        (async () => {
-          const { path, sha } = await githubService.saveTranslation(
-            {
-              path: editingArticle?.path ?? '',
-              frontmatter: mergedFrontmatter,
-              content: parsed.content,
-              originalText: parsed.originalText ?? originalText,
-              sha: editingArticle?.sha,
-            },
-            articleImages.length > 0 ? articleImages : undefined
-          );
-          useTranslatorStore.setState({
-            editingArticle: {
-              path,
-              sha,
-              frontmatter: mergedFrontmatter,
-              content: parsed.content,
-              originalText: parsed.originalText ?? originalText,
-            },
-          });
-          return { target: 'GitHub' };
-        })()
-      );
+      githubPathPromise = (async () => {
+        const { path, sha } = await githubService.saveTranslation(
+          {
+            path: editingArticle?.path ?? '',
+            frontmatter: mergedFrontmatter,
+            content: parsed.content,
+            originalText: parsed.originalText ?? originalText,
+            sha: editingArticle?.sha,
+          },
+          articleImages.length > 0 ? articleImages : undefined
+        );
+        useTranslatorStore.setState({
+          editingArticle: {
+            path,
+            sha,
+            frontmatter: mergedFrontmatter,
+            content: parsed.content,
+            originalText: parsed.originalText ?? originalText,
+          },
+        });
+        return path;
+      })();
+      tasks.push(githubPathPromise.then(() => ({ target: 'GitHub' })));
     }
 
     if (hasNotion) {
       setSavingNotion(true);
       tasks.push(
         (async () => {
+          // Existing article → path is already known (parallel with GitHub).
+          // New article → wait for the GitHub save to yield the real path so
+          // Notion binds to it instead of matching an empty GitHub Path.
+          const notionPath = editingArticle?.path
+            ? editingArticle.path
+            : githubPathPromise
+              ? await githubPathPromise
+              : '';
           await notionService.saveTranslation({
-            path: editingArticle?.path ?? '',
+            path: notionPath,
             frontmatter: mergedFrontmatter,
             content: parsed.content,
             originalText: parsed.originalText ?? originalText,
