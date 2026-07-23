@@ -30,6 +30,36 @@ function encodeBase64(content: string): string {
   return btoa(binary)
 }
 
+/**
+ * Transient failures worth retrying on idempotent GET reads: fetch-layer
+ * network errors ("Failed to fetch" — connection reset mid-download, etc.) and
+ * GitHub 429 / 5xx. Not 4xx (except 429), which are deterministic.
+ */
+function isTransientNetworkError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  if (/failed to fetch|networkerror|network error|load failed/i.test(err.message)) return true
+  const status = Number(err.message.match(/GitHub API (\d{3})/)?.[1])
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504
+}
+
+/** Retry an idempotent operation on transient network errors with linear backoff. */
+async function retryTransient<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (i < attempts && isTransientNetworkError(err)) {
+        await new Promise((r) => setTimeout(r, 400 * i))
+        continue
+      }
+      throw err
+    }
+  }
+  throw lastErr
+}
+
 /** Encode path for GitHub API: only encode URL-unsafe ASCII chars, keep Unicode as-is */
 function encodePath(path: string): string {
   return path
@@ -94,12 +124,16 @@ class GitHubService {
 
   async getFile(path: string): Promise<{ content: string; sha: string }> {
     const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${encodePath(path)}?ref=${this.branch}`
-    const res = await this.apiFetch(url)
-    const data = await res.json()
-    return {
-      content: decodeBase64(data.content.replace(/\n/g, '')),
-      sha: data.sha,
-    }
+    // GET is idempotent — retry transient network failures (e.g. "Failed to
+    // fetch" from a connection reset mid-download on large files).
+    return retryTransient(async () => {
+      const res = await this.apiFetch(url)
+      const data = await res.json()
+      return {
+        content: decodeBase64(data.content.replace(/\n/g, '')),
+        sha: data.sha,
+      }
+    })
   }
 
   /** Get just the SHA of a file without downloading content (works for >1MB files) */
@@ -266,11 +300,7 @@ class GitHubService {
       return parsed
     } catch {
       // Contents API may truncate large files or return 403 — fall back to Blob API
-      try {
-        return await this.loadGlossaryViaBlob()
-      } catch (blobErr) {
-        throw blobErr
-      }
+      return await this.loadGlossaryViaBlob()
     }
   }
 
