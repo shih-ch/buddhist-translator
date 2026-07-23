@@ -15,23 +15,9 @@ import { generateSlug, parseMarkdown } from '@/services/markdownUtils';
 import { githubService } from '@/services/github';
 import { ImageUploader } from './ImageUploader';
 import { toast } from 'sonner';
-import React from 'react';
 import { exportPDF, exportDOCX } from '@/services/exportFormats';
+import { renderMarkdownToHtml } from '@/services/markdownRender';
 import { notionService } from '@/services/notion';
-
-async function renderMarkdownToHtml(markdown: string): Promise<string> {
-  const ReactMarkdown = (await import('react-markdown')).default;
-  const remarkGfm = (await import('remark-gfm')).default;
-  const rehypeRaw = (await import('rehype-raw')).default;
-  const { renderToString } = await import('react-dom/server');
-  return renderToString(
-    React.createElement(
-      ReactMarkdown,
-      { remarkPlugins: [remarkGfm], rehypePlugins: [rehypeRaw] },
-      markdown
-    )
-  );
-}
 
 function downloadFile(content: string, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });

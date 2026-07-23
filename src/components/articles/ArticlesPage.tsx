@@ -10,6 +10,7 @@ import { notionService } from '@/services/notion'
 import { ArticleFilters } from './ArticleFilters'
 import { ArticleList, type NotionBindStatus } from './ArticleList'
 import { NotionBatchExport } from './NotionBatchExport'
+import { BatchPdfExport } from './BatchPdfExport'
 import { toast } from 'sonner'
 
 export function ArticlesPageContent() {
@@ -37,6 +38,16 @@ export function ArticlesPageContent() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [notionStatus, setNotionStatus] = useState<Map<string, NotionBindStatus> | null>(null)
   const [checkingNotion, setCheckingNotion] = useState(false)
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
+
+  const toggleSelect = (path: string) => {
+    setSelectedPaths((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }
 
   const handleCheckNotion = async () => {
     setCheckingNotion(true)
@@ -159,6 +170,21 @@ export function ArticlesPageContent() {
     })
   }, [articles, searchQuery, selectedAuthor, selectedMonth])
 
+  const selectedArticles = useMemo(
+    () => articles.filter((a) => selectedPaths.has(a.path)),
+    [articles, selectedPaths]
+  )
+
+  const toggleSelectAll = () => {
+    setSelectedPaths((prev) => {
+      const next = new Set(prev)
+      const allSel = filtered.length > 0 && filtered.every((a) => next.has(a.path))
+      if (allSel) filtered.forEach((a) => next.delete(a.path))
+      else filtered.forEach((a) => next.add(a.path))
+      return next
+    })
+  }
+
   const { owner, repo } = getGitHubRepo()
 
   if (isLoading && articles.length === 0) {
@@ -191,6 +217,17 @@ export function ArticlesPageContent() {
                 檢查 Notion 綁定
               </Button>
             )}
+            {selectedPaths.size > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedPaths(new Set())}
+                title="清除所有勾選"
+              >
+                清除選取（{selectedPaths.size}）
+              </Button>
+            )}
+            <BatchPdfExport selected={selectedArticles} />
             {notionToken && notionDatabaseId && <NotionBatchExport />}
           </div>
         </div>
@@ -211,6 +248,10 @@ export function ArticlesPageContent() {
               onDelete={deleteArticle}
               notionStatus={notionStatus ?? undefined}
               onStatusUpdate={updateNotionStatus}
+              selectable
+              selectedPaths={selectedPaths}
+              onToggleSelect={toggleSelect}
+              onToggleSelectAll={toggleSelectAll}
             />
           </CardContent>
         </Card>

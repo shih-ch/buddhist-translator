@@ -47,9 +47,22 @@ interface ArticleListProps {
   onDelete?: (path: string, sha: string) => void
   notionStatus?: Map<string, NotionBindStatus>
   onStatusUpdate?: (path: string, next: NotionBindStatus) => void
+  selectable?: boolean
+  selectedPaths?: Set<string>
+  onToggleSelect?: (path: string) => void
+  onToggleSelectAll?: () => void
 }
 
-export function ArticleList({ articles, onDelete, notionStatus, onStatusUpdate }: ArticleListProps) {
+export function ArticleList({
+  articles,
+  onDelete,
+  notionStatus,
+  onStatusUpdate,
+  selectable,
+  selectedPaths,
+  onToggleSelect,
+  onToggleSelectAll,
+}: ArticleListProps) {
   const navigate = useNavigate()
   const [deleteTarget, setDeleteTarget] = useState<ArticleSummary | null>(null)
   const [mantraTarget, setMantraTarget] = useState<{
@@ -125,11 +138,24 @@ export function ArticleList({ articles, onDelete, notionStatus, onStatusUpdate }
     return <p className="py-8 text-center text-sm text-muted-foreground">無符合條件的文章</p>
   }
 
+  const allSelected = selectable && articles.length > 0 && articles.every((a) => selectedPaths?.has(a.path))
+
   return (
     <>
       <Table>
         <TableHeader>
           <TableRow>
+            {selectable && (
+              <TableHead className="w-10">
+                <input
+                  type="checkbox"
+                  aria-label="全選"
+                  checked={!!allSelected}
+                  onChange={() => onToggleSelectAll?.()}
+                  className="cursor-pointer"
+                />
+              </TableHead>
+            )}
             <TableHead>標題</TableHead>
             <TableHead className="w-40">作者</TableHead>
             <TableHead className="w-28">日期</TableHead>
@@ -148,6 +174,17 @@ export function ArticleList({ articles, onDelete, notionStatus, onStatusUpdate }
               className="cursor-pointer"
               onClick={() => navigate(`/translator?edit=${encodeURIComponent(a.path)}`)}
             >
+              {selectable && (
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    aria-label={`選取 ${a.title}`}
+                    checked={!!selectedPaths?.has(a.path)}
+                    onChange={() => onToggleSelect?.(a.path)}
+                    className="cursor-pointer"
+                  />
+                </TableCell>
+              )}
               <TableCell className="font-medium">{a.title}</TableCell>
               <TableCell>{a.author}</TableCell>
               <TableCell className="text-muted-foreground">{a.date}</TableCell>
