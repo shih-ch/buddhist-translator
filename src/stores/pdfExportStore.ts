@@ -6,12 +6,16 @@ const STORAGE_KEY = 'bt-pdf-export';
 export interface PdfExportSettings extends BookletLayout {
   includeOriginal: boolean;
   includeToc: boolean;
+  includeImages: boolean;
+  embedFont: boolean;
 }
 
 export const PDF_DEFAULTS: PdfExportSettings = {
   ...DEFAULT_LAYOUT,
   includeOriginal: false,
   includeToc: true,
+  includeImages: true,
+  embedFont: false,
 };
 
 /** Named layout presets shown as one-tap buttons in the export dialog. */
@@ -25,7 +29,7 @@ export const PDF_PRESETS: Array<{ key: string; label: string; layout: BookletLay
 const DATA_KEYS: (keyof PdfExportSettings)[] = [
   'fontSizePt', 'lineHeight', 'marginMm',
   'titleSizePt', 'h1SizePt', 'h2SizePt', 'h3SizePt',
-  'includeOriginal', 'includeToc',
+  'includeOriginal', 'includeToc', 'includeImages', 'embedFont',
 ];
 
 function load(): PdfExportSettings {

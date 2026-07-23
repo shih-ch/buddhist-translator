@@ -48,7 +48,19 @@ export interface BookletOptions {
   title?: string;
   /** Typography; falls back to DEFAULT_LAYOUT when omitted. */
   layout?: BookletLayout;
+  /**
+   * Embed a web font (Noto Serif/Sans TC) so the PDF renders identically on any
+   * machine, regardless of installed fonts. Needs network at generation time;
+   * falls back to system fonts if the web font can't load.
+   */
+  embedFont?: boolean;
 }
+
+/** Google Fonts <link> tags injected into the print/preview <head> when embedding. */
+const FONT_LINKS = `
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700&family=Noto+Serif+TC:wght@400;600;700&display=swap" rel="stylesheet">`;
 
 const LANG_LABELS: Record<string, string> = {
   ru: '俄文',
@@ -70,7 +82,7 @@ function escapeHtml(s: string): string {
  * serif body for readability, justified CJK, generous leading, and page-break
  * rules that keep headings/tables intact. Text stays vector (selectable, crisp).
  */
-function bookletStyles(layout: BookletLayout): string {
+function bookletStyles(layout: BookletLayout, embedFont = false): string {
   const fs = layout.fontSizePt;
   // Heading levels are set explicitly (independently tunable); secondary
   // body-relative sizes still derive from the body size.
@@ -81,6 +93,9 @@ function bookletStyles(layout: BookletLayout): string {
   const metaFs = Math.max(8, fs - 2.5);
   const tableFs = Math.max(8, fs - 1.5);
   const origFs = Math.max(8, fs - 1);
+  // When embedding, put the web font first so it's used (and baked into the PDF).
+  const serif = `${embedFont ? '"Noto Serif TC", ' : ''}"Noto Serif CJK TC", "Source Han Serif TC", "Songti TC", "PMingLiU", "MingLiU", serif`;
+  const sans = `${embedFont ? '"Noto Sans TC", ' : ''}"Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif`;
   return `
     @page {
       size: B5 portrait;
@@ -89,8 +104,7 @@ function bookletStyles(layout: BookletLayout): string {
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
     body {
-      font-family: "Noto Serif CJK TC", "Source Han Serif TC", "Songti TC",
-                   "PMingLiU", "MingLiU", serif;
+      font-family: ${serif};
       font-size: ${fs}pt;
       line-height: ${layout.lineHeight};
       color: #1a1a1a;
@@ -98,10 +112,14 @@ function bookletStyles(layout: BookletLayout): string {
       text-justify: inter-ideograph;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
+      /* Break long unbreakable tokens so content never exceeds the page width,
+         which would make the browser shrink-to-fit the whole document (and thus
+         change apparent font size / margins depending on the articles). */
+      overflow-wrap: break-word;
+      word-break: break-word;
     }
     h1, h2, h3, h4 {
-      font-family: "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei",
-                   sans-serif;
+      font-family: ${sans};
       line-height: 1.4;
       break-after: avoid;
       page-break-after: avoid;
@@ -149,12 +167,22 @@ function bookletStyles(layout: BookletLayout): string {
     table {
       border-collapse: collapse;
       width: 100%;
+      /* Fixed layout + wrapping cells guarantee a table can never widen past
+         the page and trigger the browser's shrink-to-fit scaling. */
+      table-layout: fixed;
       margin: 4mm 0;
       font-size: ${tableFs}pt;
       break-inside: avoid;
       page-break-inside: avoid;
     }
-    th, td { border: 0.5pt solid #999; padding: 1.8mm 2.5mm; text-align: left; vertical-align: top; }
+    th, td {
+      border: 0.5pt solid #999;
+      padding: 1.8mm 2.5mm;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
     thead th { background: #f0f0f0; }
 
     blockquote {
@@ -166,7 +194,7 @@ function bookletStyles(layout: BookletLayout): string {
     ul, ol { padding-left: 7mm; margin: 0 0 3mm; }
     li { margin-bottom: 1mm; }
     hr { border: none; border-top: 0.5pt solid #ccc; margin: 5mm 0; }
-    img { max-width: 100%; break-inside: avoid; }
+    img { max-width: 100%; height: auto; break-inside: avoid; }
     code {
       font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
       font-size: 9.5pt;
@@ -204,6 +232,7 @@ function articleMeta(fm: ArticleFrontmatter): string {
 /** Assemble the full, self-contained HTML document for printing. */
 export function buildBookletHtml(articles: BookletArticle[], opts: BookletOptions): string {
   const layout = opts.layout ?? DEFAULT_LAYOUT;
+  const embedFont = opts.embedFont ?? false;
   const docTitle = opts.title || (articles.length === 1 ? articles[0].frontmatter.title : '翻譯文集');
 
   const cover =
@@ -255,8 +284,8 @@ export function buildBookletHtml(articles: BookletArticle[], opts: BookletOption
 <html lang="zh-TW">
 <head>
 <meta charset="utf-8" />
-<title>${escapeHtml(docTitle)}</title>
-<style>${bookletStyles(layout)}</style>
+<title>${escapeHtml(docTitle)}</title>${embedFont ? FONT_LINKS : ''}
+<style>${bookletStyles(layout, embedFont)}</style>
 </head>
 <body>
 ${cover}
@@ -293,7 +322,7 @@ const PREVIEW_BODY = `
  * stylesheet as the printed output so what you tune is what you get. Meant to
  * be dropped into an <iframe srcDoc> and scaled down.
  */
-export function buildPreviewHtml(layout: BookletLayout): string {
+export function buildPreviewHtml(layout: BookletLayout, embedFont = false): string {
   const frame = `
     html, body { background: #e5e5e5; }
     .sheet {
@@ -307,8 +336,8 @@ export function buildPreviewHtml(layout: BookletLayout): string {
   return `<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<meta charset="utf-8" />
-<style>${bookletStyles(layout)}${frame}</style>
+<meta charset="utf-8" />${embedFont ? FONT_LINKS : ''}
+<style>${bookletStyles(layout, embedFont)}${frame}</style>
 </head>
 <body><div class="sheet">${PREVIEW_BODY}</div></body>
 </html>`;
@@ -323,13 +352,14 @@ export function printBookletHtml(html: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const iframe = document.createElement('iframe');
     iframe.setAttribute('aria-hidden', 'true');
+    // A real (B5-ish) size positioned off-screen gives the print layout a sane
+    // viewport; a 0×0 iframe can measure percentage/table widths at zero.
     iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
+    iframe.style.left = '-10000px';
+    iframe.style.top = '0';
+    iframe.style.width = '190mm';
+    iframe.style.height = '260mm';
     iframe.style.border = '0';
-    iframe.style.visibility = 'hidden';
 
     let done = false;
     const cleanup = () => {
@@ -350,6 +380,24 @@ export function printBookletHtml(html: string): Promise<void> {
       try {
         // Ensure fonts are loaded so CJK line-breaking is measured correctly.
         if (doc.fonts?.ready) await doc.fonts.ready;
+        // Wait for images (e.g. remote GitHub images) to finish, or they print
+        // blank. Cap the wait so one slow/broken image can't block forever.
+        const imgs = Array.from(doc.images);
+        if (imgs.length > 0) {
+          await Promise.race([
+            Promise.all(
+              imgs.map((img) =>
+                img.complete
+                  ? Promise.resolve()
+                  : new Promise<void>((res) => {
+                      img.addEventListener('load', () => res(), { once: true });
+                      img.addEventListener('error', () => res(), { once: true });
+                    })
+              )
+            ),
+            new Promise<void>((res) => setTimeout(res, 8000)),
+          ]);
+        }
         win.addEventListener('afterprint', cleanup, { once: true });
         win.focus();
         win.print();

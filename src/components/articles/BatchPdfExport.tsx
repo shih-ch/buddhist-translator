@@ -23,6 +23,9 @@ interface LogEntry {
 /** Yield to the browser event loop so UI stays responsive during the loop. */
 const yieldToMain = () => new Promise<void>((r) => setTimeout(r, 0))
 
+/** Remove <img> tags (void element) when the user opts out of images. */
+const stripImages = (html: string) => html.replace(/<img\b[^>]*>/gi, '')
+
 interface SliderRowProps {
   label: string
   value: number
@@ -75,6 +78,8 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
   const h3SizePt = usePdfExportStore((s) => s.h3SizePt)
   const includeOriginal = usePdfExportStore((s) => s.includeOriginal)
   const includeToc = usePdfExportStore((s) => s.includeToc)
+  const includeImages = usePdfExportStore((s) => s.includeImages)
+  const embedFont = usePdfExportStore((s) => s.embedFont)
   const update = usePdfExportStore((s) => s.update)
   const applyPreset = usePdfExportStore((s) => s.applyPreset)
   const reset = usePdfExportStore((s) => s.reset)
@@ -82,8 +87,8 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
   const total = selected.length
 
   const previewHtml = useMemo(
-    () => buildPreviewHtml({ fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt }),
-    [fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt]
+    () => buildPreviewHtml({ fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt }, embedFont),
+    [fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt, embedFont]
   )
 
   const handleStart = useCallback(async () => {
@@ -107,16 +112,23 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
 
       try {
         const article = await githubService.loadTranslation(path)
-        const contentHtml = await renderMarkdownToHtml(article.content)
-        const originalHtml =
+        let contentHtml = await renderMarkdownToHtml(article.content)
+        let originalHtml =
           includeOriginal && article.originalText?.trim()
             ? await renderMarkdownToHtml(article.originalText)
             : undefined
+        if (!includeImages) {
+          contentHtml = stripImages(contentHtml)
+          if (originalHtml) originalHtml = stripImages(originalHtml)
+        }
         booklet.push({ frontmatter: article.frontmatter, contentHtml, originalHtml })
         setLogs((prev) => [...prev, { title, status: 'success' }])
       } catch (err) {
         failed++
-        const error = err instanceof Error ? err.message : 'Unknown error'
+        const raw = err instanceof Error ? err.message : 'Unknown error'
+        const error = /failed to fetch|network/i.test(raw)
+          ? '網路載入失敗（已自動重試），請稍後再試一次'
+          : raw
         setLogs((prev) => [...prev, { title, status: 'error', error }])
       }
       await yieldToMain()
@@ -137,6 +149,7 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
       const html = buildBookletHtml(booklet, {
         includeOriginal,
         includeToc,
+        embedFont,
         layout: { fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt },
       })
       await printBookletHtml(html)
@@ -145,7 +158,7 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
       toast.error(`列印失敗：${err instanceof Error ? err.message : 'Unknown error'}`)
     }
     setPhase('done')
-  }, [selected, includeOriginal, includeToc, fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt])
+  }, [selected, includeOriginal, includeToc, includeImages, embedFont, fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt])
 
   const handleCancel = () => {
     abortRef.current?.abort()
@@ -323,6 +336,28 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
             </details>
 
             {/* Content options */}
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={includeImages}
+                onChange={(e) => update({ includeImages: e.target.checked })}
+              />
+              包含圖片
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={embedFont}
+                onChange={(e) => update({ embedFont: e.target.checked })}
+              />
+              <span>
+                內嵌字型（跨電腦顯示一致）
+                <span className="block text-xs text-muted-foreground">
+                  產生時需連網下載 Noto 字型並嵌入 PDF；離線則退回系統字型
+                </span>
+              </span>
+            </label>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
