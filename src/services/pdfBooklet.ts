@@ -134,8 +134,7 @@ function bookletStyles(layout: BookletLayout, embedFont = false, pageFooter = fa
       font-size: ${fs}pt;
       line-height: ${layout.lineHeight};
       color: #1a1a1a;
-      text-align: justify;
-      text-justify: inter-ideograph;
+      text-align: left;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       /* Break long unbreakable tokens so content never exceeds the page width,
