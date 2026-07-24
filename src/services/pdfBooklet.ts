@@ -99,11 +99,11 @@ function bookletStyles(layout: BookletLayout, embedFont = false, pageFooter = fa
   const pagedCss = pageFooter ? `
     @page {
       @bottom-left { content: string(runningtitle); font-size: 8pt; color: #888; }
-      @bottom-right { content: counter(page); font-size: 8pt; color: #888; }
+      @bottom-center { content: counter(page); font-size: 8pt; color: #888; }
     }
     @page :first {
       @bottom-left { content: none; }
-      @bottom-right { content: none; }
+      @bottom-center { content: none; }
     }
     .article-title { string-set: runningtitle content(text); }
   ` : '';
@@ -369,7 +369,7 @@ export function buildPreviewHtml(
     ? `<div class="article-qr"><div class="qr-placeholder">QR</div><div class="qr-caption">掃描看原文</div></div>`
     : '';
   const footer = showFooter
-    ? `<div class="preview-footer"><span>預覽：文章標題</span><span>1</span></div>`
+    ? `<div class="preview-footer"><span class="pf-title">預覽：文章標題</span><span class="pf-num">1</span></div>`
     : '';
   const frame = `
     html, body { background: #e5e5e5; }
@@ -385,8 +385,10 @@ export function buildPreviewHtml(
     .preview-footer {
       position: absolute; left: 0; right: 0; bottom: 0;
       padding: 2.5mm ${layout.marginMm}mm;
-      display: flex; justify-content: space-between;
       font-size: 8pt; color: #888;
+    }
+    .preview-footer .pf-num {
+      position: absolute; left: 50%; transform: translateX(-50%);
     }`;
   return `<!DOCTYPE html>
 <html lang="zh-TW">
