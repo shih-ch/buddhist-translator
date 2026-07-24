@@ -37,10 +37,13 @@ export const AI_PROVIDERS: Record<AIProviderId, { name: string; models: AIModel[
   anthropic: {
     name: 'Anthropic',
     models: [
-      { id: 'claude-opus-4-7', name: 'Claude Opus 4.7', inputPrice: 5, outputPrice: 25 },
-      { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', inputPrice: 3, outputPrice: 15 },
+      // Current — newest first
+      { id: 'claude-opus-4-8', name: 'Claude Opus 4.8', inputPrice: 5, outputPrice: 25 },
+      { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', inputPrice: 3, outputPrice: 15 },
       { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', inputPrice: 1, outputPrice: 5 },
       // Legacy (still available)
+      { id: 'claude-opus-4-7', name: 'Claude Opus 4.7 (legacy)', inputPrice: 5, outputPrice: 25 },
+      { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6 (legacy)', inputPrice: 3, outputPrice: 15 },
       { id: 'claude-opus-4-6', name: 'Claude Opus 4.6 (legacy)', inputPrice: 5, outputPrice: 25 },
       { id: 'claude-opus-4-5', name: 'Claude Opus 4.5 (legacy)', inputPrice: 5, outputPrice: 25 },
       { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5 (legacy)', inputPrice: 3, outputPrice: 15 },
