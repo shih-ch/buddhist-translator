@@ -428,13 +428,17 @@ interface PagedWindow extends Window {
 export async function printBookletHtml(html: string, opts: { paged?: boolean } = {}): Promise<void> {
   let finalHtml = html;
   if (opts.paged) {
-    // Inline the Paged.js polyfill (auto:false — we trigger pagination ourselves
-    // once fonts/images are ready). Loaded lazily so it stays out of the main
-    // bundle. Chrome can't do @page margin boxes / page counters without this.
-    const { default: polyfill } = await import('../../node_modules/pagedjs/dist/paged.polyfill.min.js?raw');
+    // Load Paged.js as an EXTERNAL script (auto:false — we trigger pagination
+    // ourselves once fonts/images are ready). Inlining the ~500KB polyfill via
+    // document.write proved unreliable: Chrome sometimes printed with its own
+    // native header/footer instead of the Paged.js margin boxes (running title
+    // + page number). An external <script src> matches the flow that prints
+    // correctly. Absolute URL so the about:blank print iframe can resolve it.
+    const { default: pagedUrl } = await import('../../node_modules/pagedjs/dist/paged.polyfill.min.js?url');
+    const src = new URL(pagedUrl, window.location.href).href;
     finalHtml = html.replace(
       '</body>',
-      `<script>window.PagedConfig={auto:false};</script>\n<script>${polyfill}</script>\n</body>`
+      `<script>window.PagedConfig={auto:false};</script>\n<script src="${src}"></script>\n</body>`
     );
   }
 
@@ -488,8 +492,13 @@ export async function printBookletHtml(html: string, opts: { paged?: boolean } =
           ]);
         }
         // Paginate with Paged.js (footer + page numbers) before printing.
-        if (opts.paged && win.PagedPolyfill) {
-          await win.PagedPolyfill.preview();
+        if (opts.paged) {
+          // The external polyfill should be loaded by onload; guard anyway.
+          let tries = 0;
+          while (!win.PagedPolyfill && tries++ < 150) {
+            await new Promise<void>((r) => setTimeout(r, 20));
+          }
+          if (win.PagedPolyfill) await win.PagedPolyfill.preview();
         }
         win.addEventListener('afterprint', cleanup, { once: true });
         win.focus();
