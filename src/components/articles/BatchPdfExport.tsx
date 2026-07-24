@@ -93,6 +93,7 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
   const includeImages = usePdfExportStore((s) => s.includeImages)
   const includeQr = usePdfExportStore((s) => s.includeQr)
   const embedFont = usePdfExportStore((s) => s.embedFont)
+  const pageFooter = usePdfExportStore((s) => s.pageFooter)
   const update = usePdfExportStore((s) => s.update)
   const applyPreset = usePdfExportStore((s) => s.applyPreset)
   const reset = usePdfExportStore((s) => s.reset)
@@ -100,8 +101,8 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
   const total = selected.length
 
   const previewHtml = useMemo(
-    () => buildPreviewHtml({ fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt }, embedFont, includeQr),
-    [fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt, embedFont, includeQr]
+    () => buildPreviewHtml({ fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt }, embedFont, includeQr, pageFooter),
+    [fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt, embedFont, includeQr, pageFooter]
   )
 
   const handleStart = useCallback(async () => {
@@ -164,15 +165,16 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
         includeOriginal,
         includeToc,
         embedFont,
+        pageFooter,
         layout: { fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt },
       })
-      await printBookletHtml(html)
+      await printBookletHtml(html, { paged: pageFooter })
       toast.success(`已開啟列印：${booklet.length} 篇${failed ? `（${failed} 篇失敗）` : ''}。請在對話框選「另存為 PDF」`)
     } catch (err) {
       toast.error(`列印失敗：${err instanceof Error ? err.message : 'Unknown error'}`)
     }
     setPhase('done')
-  }, [selected, includeOriginal, includeToc, includeImages, includeQr, embedFont, fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt])
+  }, [selected, includeOriginal, includeToc, includeImages, includeQr, embedFont, pageFooter, fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt])
 
   const handleCancel = () => {
     abortRef.current?.abort()
@@ -402,6 +404,20 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
                 disabled={total < 2}
               />
               加入目錄{total < 2 ? '（單篇不需要）' : ''}
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={pageFooter}
+                onChange={(e) => update({ pageFooter: e.target.checked })}
+              />
+              <span>
+                頁碼與頁尾文章標題
+                <span className="block text-xs text-muted-foreground">
+                  每頁底部顯示當前文章標題與頁碼（產生較慢）
+                </span>
+              </span>
             </label>
 
             <Button onClick={handleStart} disabled={total === 0}>

@@ -56,6 +56,12 @@ export interface BookletOptions {
    * falls back to system fonts if the web font can't load.
    */
   embedFont?: boolean;
+  /**
+   * Add a running footer (article title + page number) via Paged.js. The HTML
+   * carries the @page CSS; the print flow must run the polyfill (see
+   * printBookletHtml `paged`) for it to take effect.
+   */
+  pageFooter?: boolean;
 }
 
 /** Google Fonts <link> tags injected into the print/preview <head> when embedding. */
@@ -84,8 +90,23 @@ function escapeHtml(s: string): string {
  * serif body for readability, justified CJK, generous leading, and page-break
  * rules that keep headings/tables intact. Text stays vector (selectable, crisp).
  */
-function bookletStyles(layout: BookletLayout, embedFont = false): string {
+function bookletStyles(layout: BookletLayout, embedFont = false, pageFooter = false): string {
   const fs = layout.fontSizePt;
+  // Running footer (article title, left) + page number (right), rendered by
+  // Paged.js. Chrome ignores @page margin boxes on its own, so this only takes
+  // effect when the print flow runs the Paged.js polyfill. Suppressed on the
+  // very first page (cover / opening page).
+  const pagedCss = pageFooter ? `
+    @page {
+      @bottom-left { content: string(runningtitle); font-size: 8pt; color: #888; }
+      @bottom-right { content: counter(page); font-size: 8pt; color: #888; }
+    }
+    @page :first {
+      @bottom-left { content: none; }
+      @bottom-right { content: none; }
+    }
+    .article-title { string-set: runningtitle content(text); }
+  ` : '';
   // Heading levels are set explicitly (independently tunable); secondary
   // body-relative sizes still derive from the body size.
   const h1 = layout.h1SizePt;
@@ -232,6 +253,7 @@ function bookletStyles(layout: BookletLayout, embedFont = false): string {
       color: #333;
     }
     .original-label { font-size: 9pt; color: #888; margin-bottom: 2mm; letter-spacing: 0.05em; }
+    ${pagedCss}
   `;
 }
 
@@ -248,6 +270,7 @@ function articleMeta(fm: ArticleFrontmatter): string {
 export function buildBookletHtml(articles: BookletArticle[], opts: BookletOptions): string {
   const layout = opts.layout ?? DEFAULT_LAYOUT;
   const embedFont = opts.embedFont ?? false;
+  const pageFooter = opts.pageFooter ?? false;
   const docTitle = opts.title || (articles.length === 1 ? articles[0].frontmatter.title : '翻譯文集');
 
   const cover =
@@ -306,7 +329,7 @@ export function buildBookletHtml(articles: BookletArticle[], opts: BookletOption
 <head>
 <meta charset="utf-8" />
 <title>${escapeHtml(docTitle)}</title>${embedFont ? FONT_LINKS : ''}
-<style>${bookletStyles(layout, embedFont)}</style>
+<style>${bookletStyles(layout, embedFont, pageFooter)}</style>
 </head>
 <body>
 ${cover}
@@ -336,19 +359,34 @@ const PREVIEW_CONTENT = `
  * be dropped into an <iframe srcDoc> and scaled down. The QR (when on) is shown
  * as a placeholder box since real codes are generated per-article at export.
  */
-export function buildPreviewHtml(layout: BookletLayout, embedFont = false, showQr = false): string {
+export function buildPreviewHtml(
+  layout: BookletLayout,
+  embedFont = false,
+  showQr = false,
+  showFooter = false
+): string {
   const qr = showQr
     ? `<div class="article-qr"><div class="qr-placeholder">QR</div><div class="qr-caption">掃描看原文</div></div>`
+    : '';
+  const footer = showFooter
+    ? `<div class="preview-footer"><span>預覽：文章標題</span><span>1</span></div>`
     : '';
   const frame = `
     html, body { background: #e5e5e5; }
     .sheet {
+      position: relative;
       width: 176mm;
       min-height: 250mm;
       margin: 0 auto;
       padding: ${layout.marginMm}mm;
       background: #fff;
       box-sizing: border-box;
+    }
+    .preview-footer {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      padding: 2.5mm ${layout.marginMm}mm;
+      display: flex; justify-content: space-between;
+      font-size: 8pt; color: #888;
     }`;
   return `<!DOCTYPE html>
 <html lang="zh-TW">
@@ -367,6 +405,7 @@ export function buildPreviewHtml(layout: BookletLayout, embedFont = false, showQ
     </header>
     <div class="article-body">${PREVIEW_CONTENT}</div>
   </article>
+  ${footer}
 </div></body>
 </html>`;
 }
@@ -376,7 +415,24 @@ export function buildPreviewHtml(layout: BookletLayout, embedFont = false, showQ
  * Waits for layout + fonts before printing so CJK glyphs are measured correctly.
  * The iframe is removed after the dialog closes (afterprint / fallback timeout).
  */
-export function printBookletHtml(html: string): Promise<void> {
+interface PagedWindow extends Window {
+  PagedConfig?: { auto: boolean };
+  PagedPolyfill?: { preview: () => Promise<unknown> };
+}
+
+export async function printBookletHtml(html: string, opts: { paged?: boolean } = {}): Promise<void> {
+  let finalHtml = html;
+  if (opts.paged) {
+    // Inline the Paged.js polyfill (auto:false — we trigger pagination ourselves
+    // once fonts/images are ready). Loaded lazily so it stays out of the main
+    // bundle. Chrome can't do @page margin boxes / page counters without this.
+    const { default: polyfill } = await import('../../node_modules/pagedjs/dist/paged.polyfill.min.js?raw');
+    finalHtml = html.replace(
+      '</body>',
+      `<script>window.PagedConfig={auto:false};</script>\n<script>${polyfill}</script>\n</body>`
+    );
+  }
+
   return new Promise((resolve, reject) => {
     const iframe = document.createElement('iframe');
     iframe.setAttribute('aria-hidden', 'true');
@@ -398,7 +454,7 @@ export function printBookletHtml(html: string): Promise<void> {
     };
 
     iframe.onload = async () => {
-      const win = iframe.contentWindow;
+      const win = iframe.contentWindow as PagedWindow | null;
       const doc = iframe.contentDocument;
       if (!win || !doc) {
         cleanup();
@@ -426,6 +482,10 @@ export function printBookletHtml(html: string): Promise<void> {
             new Promise<void>((res) => setTimeout(res, 8000)),
           ]);
         }
+        // Paginate with Paged.js (footer + page numbers) before printing.
+        if (opts.paged && win.PagedPolyfill) {
+          await win.PagedPolyfill.preview();
+        }
         win.addEventListener('afterprint', cleanup, { once: true });
         win.focus();
         win.print();
@@ -446,7 +506,7 @@ export function printBookletHtml(html: string): Promise<void> {
       return;
     }
     doc.open();
-    doc.write(html);
+    doc.write(finalHtml);
     doc.close();
   });
 }
