@@ -101,10 +101,13 @@ function bookletStyles(layout: BookletLayout, embedFont = false, pageFooter = fa
       @bottom-left { content: string(runningtitle); font-size: 8pt; color: #888; }
       @bottom-center { content: counter(page); font-size: 8pt; color: #888; }
     }
-    @page :first {
+    /* Cover / TOC get no footer; article pages (default page) always do —
+       including the first, so a single-article export still shows it. */
+    @page blank {
       @bottom-left { content: none; }
       @bottom-center { content: none; }
     }
+    .cover, .toc { page: blank; }
     .article-title { string-set: runningtitle content(text); }
   ` : '';
   // Heading levels are set explicitly (independently tunable); secondary
