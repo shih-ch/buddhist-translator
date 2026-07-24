@@ -7,6 +7,7 @@ export interface PdfExportSettings extends BookletLayout {
   includeOriginal: boolean;
   includeToc: boolean;
   includeImages: boolean;
+  includeQr: boolean;
   embedFont: boolean;
 }
 
@@ -15,6 +16,7 @@ export const PDF_DEFAULTS: PdfExportSettings = {
   includeOriginal: false,
   includeToc: true,
   includeImages: true,
+  includeQr: true,
   embedFont: false,
 };
 
@@ -29,7 +31,7 @@ export const PDF_PRESETS: Array<{ key: string; label: string; layout: BookletLay
 const DATA_KEYS: (keyof PdfExportSettings)[] = [
   'fontSizePt', 'lineHeight', 'marginMm',
   'titleSizePt', 'h1SizePt', 'h2SizePt', 'h3SizePt',
-  'includeOriginal', 'includeToc', 'includeImages', 'embedFont',
+  'includeOriginal', 'includeToc', 'includeImages', 'includeQr', 'embedFont',
 ];
 
 function load(): PdfExportSettings {

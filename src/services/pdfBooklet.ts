@@ -6,6 +6,8 @@ export interface BookletArticle {
   contentHtml: string;
   /** Rendered original-text HTML (only used when includeOriginal is on). */
   originalHtml?: string;
+  /** Inline SVG QR code (links to the source URL), shown in the article header. */
+  qrSvg?: string;
 }
 
 /**
@@ -156,9 +158,22 @@ function bookletStyles(layout: BookletLayout, embedFont = false): string {
     .article:first-of-type { break-before: auto; page-break-before: auto; }
 
     .article-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 6mm;
       border-bottom: 1pt solid #999;
       margin-bottom: 7mm;
       padding-bottom: 3mm;
+    }
+    .article-header .head-text { flex: 1 1 auto; min-width: 0; }
+    .article-qr { flex: 0 0 auto; width: 22mm; text-align: center; }
+    .article-qr svg { display: block; width: 22mm; height: 22mm; }
+    .article-qr .qr-caption { font-size: 7pt; color: #888; margin-top: 0.5mm; }
+    .article-qr .qr-placeholder {
+      width: 22mm; height: 22mm; border: 1pt dashed #bbb;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 7pt; color: #bbb;
     }
     .article-title { font-size: ${titleFs}pt; margin: 0 0 2mm; line-height: 1.3; }
     .article-meta { font-size: ${metaFs}pt; color: #666; line-height: 1.6; }
@@ -269,10 +284,16 @@ export function buildBookletHtml(articles: BookletArticle[], opts: BookletOption
                ${a.originalHtml}
              </div>`
           : '';
+      const qr = a.qrSvg
+        ? `<div class="article-qr">${a.qrSvg}<div class="qr-caption">掃描看原文</div></div>`
+        : '';
       return `<article class="article">
           <header class="article-header">
-            <h1 class="article-title">${escapeHtml(a.frontmatter.title || '未命名')}</h1>
-            <div class="article-meta">${articleMeta(a.frontmatter)}</div>
+            <div class="head-text">
+              <h1 class="article-title">${escapeHtml(a.frontmatter.title || '未命名')}</h1>
+              <div class="article-meta">${articleMeta(a.frontmatter)}</div>
+            </div>
+            ${qr}
           </header>
           <div class="article-body">${a.contentHtml}</div>
           ${original}
@@ -295,34 +316,30 @@ ${body}
 </html>`;
 }
 
-const PREVIEW_BODY = `
-  <article class="article">
-    <header class="article-header">
-      <h1 class="article-title">預覽：文章標題</h1>
-      <div class="article-meta"><span>作者</span><span>2026-01-01</span><span>俄文</span></div>
-    </header>
-    <div class="article-body">
-      <p>這是內文範例，用來即時預覽字級、行距與邊界的變化。願以此功德，莊嚴佛淨土，上報四重恩，下濟三途苦。</p>
-      <h2>一、章節標題（標題 2）</h2>
-      <p>次段內文。觀想本尊，身色赤紅，三面六臂，光明遍照，行者至誠頂禮，發菩提心，願度一切有情。</p>
-      <h3>（一）小節標題（標題 3）</h3>
-      <p>更細一層的內文，用來示範標題 3 的字級。</p>
-      <table>
-        <thead><tr><th>梵文</th><th>對音</th><th>字義</th></tr></thead>
-        <tbody>
-          <tr><td>oṃ</td><td>唵</td><td>皈命</td></tr>
-          <tr><td>hūṃ phaṭ</td><td>吽泮吒</td><td>摧破</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </article>`;
+const PREVIEW_CONTENT = `
+  <p>這是內文範例，用來即時預覽字級、行距與邊界的變化。願以此功德，莊嚴佛淨土，上報四重恩，下濟三途苦。</p>
+  <h2>一、章節標題（標題 2）</h2>
+  <p>次段內文。觀想本尊，身色赤紅，三面六臂，光明遍照，行者至誠頂禮，發菩提心，願度一切有情。</p>
+  <h3>（一）小節標題（標題 3）</h3>
+  <p>更細一層的內文，用來示範標題 3 的字級。</p>
+  <table>
+    <thead><tr><th>梵文</th><th>對音</th><th>字義</th></tr></thead>
+    <tbody>
+      <tr><td>oṃ</td><td>唵</td><td>皈命</td></tr>
+      <tr><td>hūṃ phaṭ</td><td>吽泮吒</td><td>摧破</td></tr>
+    </tbody>
+  </table>`;
 
 /**
  * Self-contained on-screen preview of a single B5 sheet, using the EXACT same
  * stylesheet as the printed output so what you tune is what you get. Meant to
- * be dropped into an <iframe srcDoc> and scaled down.
+ * be dropped into an <iframe srcDoc> and scaled down. The QR (when on) is shown
+ * as a placeholder box since real codes are generated per-article at export.
  */
-export function buildPreviewHtml(layout: BookletLayout, embedFont = false): string {
+export function buildPreviewHtml(layout: BookletLayout, embedFont = false, showQr = false): string {
+  const qr = showQr
+    ? `<div class="article-qr"><div class="qr-placeholder">QR</div><div class="qr-caption">掃描看原文</div></div>`
+    : '';
   const frame = `
     html, body { background: #e5e5e5; }
     .sheet {
@@ -339,7 +356,18 @@ export function buildPreviewHtml(layout: BookletLayout, embedFont = false): stri
 <meta charset="utf-8" />${embedFont ? FONT_LINKS : ''}
 <style>${bookletStyles(layout, embedFont)}${frame}</style>
 </head>
-<body><div class="sheet">${PREVIEW_BODY}</div></body>
+<body><div class="sheet">
+  <article class="article">
+    <header class="article-header">
+      <div class="head-text">
+        <h1 class="article-title">預覽：文章標題</h1>
+        <div class="article-meta"><span>作者</span><span>2026-01-01</span><span>俄文</span></div>
+      </div>
+      ${qr}
+    </header>
+    <div class="article-body">${PREVIEW_CONTENT}</div>
+  </article>
+</div></body>
 </html>`;
 }
 

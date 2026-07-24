@@ -26,6 +26,18 @@ const yieldToMain = () => new Promise<void>((r) => setTimeout(r, 0))
 /** Remove <img> tags (void element) when the user opts out of images. */
 const stripImages = (html: string) => html.replace(/<img\b[^>]*>/gi, '')
 
+/** Generate an inline SVG QR code for a source URL, or undefined if not a URL. */
+async function makeQrSvg(source: string | undefined): Promise<string | undefined> {
+  const url = source?.trim()
+  if (!url || !/^https?:\/\//i.test(url)) return undefined
+  try {
+    const QRCode = (await import('qrcode')).default
+    return await QRCode.toString(url, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' })
+  } catch {
+    return undefined
+  }
+}
+
 interface SliderRowProps {
   label: string
   value: number
@@ -79,6 +91,7 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
   const includeOriginal = usePdfExportStore((s) => s.includeOriginal)
   const includeToc = usePdfExportStore((s) => s.includeToc)
   const includeImages = usePdfExportStore((s) => s.includeImages)
+  const includeQr = usePdfExportStore((s) => s.includeQr)
   const embedFont = usePdfExportStore((s) => s.embedFont)
   const update = usePdfExportStore((s) => s.update)
   const applyPreset = usePdfExportStore((s) => s.applyPreset)
@@ -87,8 +100,8 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
   const total = selected.length
 
   const previewHtml = useMemo(
-    () => buildPreviewHtml({ fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt }, embedFont),
-    [fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt, embedFont]
+    () => buildPreviewHtml({ fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt }, embedFont, includeQr),
+    [fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt, embedFont, includeQr]
   )
 
   const handleStart = useCallback(async () => {
@@ -121,7 +134,8 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
           contentHtml = stripImages(contentHtml)
           if (originalHtml) originalHtml = stripImages(originalHtml)
         }
-        booklet.push({ frontmatter: article.frontmatter, contentHtml, originalHtml })
+        const qrSvg = includeQr ? await makeQrSvg(article.frontmatter.source) : undefined
+        booklet.push({ frontmatter: article.frontmatter, contentHtml, originalHtml, qrSvg })
         setLogs((prev) => [...prev, { title, status: 'success' }])
       } catch (err) {
         failed++
@@ -158,7 +172,7 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
       toast.error(`列印失敗：${err instanceof Error ? err.message : 'Unknown error'}`)
     }
     setPhase('done')
-  }, [selected, includeOriginal, includeToc, includeImages, embedFont, fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt])
+  }, [selected, includeOriginal, includeToc, includeImages, includeQr, embedFont, fontSizePt, lineHeight, marginMm, titleSizePt, h1SizePt, h2SizePt, h3SizePt])
 
   const handleCancel = () => {
     abortRef.current?.abort()
@@ -343,6 +357,20 @@ export function BatchPdfExport({ selected }: BatchPdfExportProps) {
                 onChange={(e) => update({ includeImages: e.target.checked })}
               />
               包含圖片
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={includeQr}
+                onChange={(e) => update({ includeQr: e.target.checked })}
+              />
+              <span>
+                每篇標題加原文 QR Code
+                <span className="block text-xs text-muted-foreground">
+                  掃描開啟原文網頁；僅在該篇來源為網址時顯示
+                </span>
+              </span>
             </label>
             <label className="flex items-start gap-2 text-sm">
               <input
