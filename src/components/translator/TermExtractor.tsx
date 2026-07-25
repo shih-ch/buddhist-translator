@@ -49,30 +49,41 @@ interface TermExtractorProps {
 export function TermExtractor({ open, onClose, messageId }: TermExtractorProps) {
   const [loading, setLoading] = useState(false);
   const [terms, setTerms] = useState<ExtractedTerm[]>([]);
-  const messages = useTranslatorStore((s) => s.messages);
-  const originalText = useTranslatorStore((s) => s.originalText);
 
   useEffect(() => {
     if (!open || !messageId) return;
 
-    const msg = messages.find((m) => m.id === messageId);
-    if (!msg) return;
-
     let cancelled = false;
-    setLoading(true);
-    setTerms([]);
 
-    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('term_extraction');
-    const apiKeys = useSettingsStore.getState().apiKeys;
-    if (!apiKeys[fnConfig.provider]) {
-      toast.error('請先在設定中填入 API Key 以使用術語提取');
-      setLoading(false);
-      return;
-    }
-    const aiMessages = buildTermExtractionMessages(fnConfig.prompt, originalText, msg.content);
+    // The whole request lifecycle — including flipping to the loading state —
+    // lives in here. `messages` / `originalText` are read imperatively: they are
+    // the *input* of this one-shot request, not something it should re-run on.
+    // (Depending on them re-fired a paid extraction call every time a new chat
+    // message arrived while the dialog was open.)
+    const extract = async () => {
+      const { messages, originalText } = useTranslatorStore.getState();
+      const msg = messages.find((m) => m.id === messageId);
+      if (!msg) return;
 
-    trackedCallFunction(fnConfig, apiKeys, aiMessages, undefined, 'term_extraction')
-      .then((response) => {
+      const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('term_extraction');
+      const apiKeys = useSettingsStore.getState().apiKeys;
+      if (!apiKeys[fnConfig.provider]) {
+        toast.error('請先在設定中填入 API Key 以使用術語提取');
+        return;
+      }
+
+      setLoading(true);
+      setTerms([]);
+      const aiMessages = buildTermExtractionMessages(fnConfig.prompt, originalText, msg.content);
+
+      try {
+        const response = await trackedCallFunction(
+          fnConfig,
+          apiKeys,
+          aiMessages,
+          undefined,
+          'term_extraction'
+        );
         if (cancelled) return;
         try {
           // Try to parse JSON from the response (may be wrapped in markdown code block)
@@ -92,18 +103,19 @@ export function TermExtractor({ open, onClose, messageId }: TermExtractorProps) 
           toast.error('術語提取結果解析失敗');
           setTerms([]);
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         if (cancelled) return;
         toast.error(`術語提取失敗：${err instanceof Error ? err.message : 'Unknown error'}`);
         setTerms([]);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    };
+
+    void extract();
 
     return () => { cancelled = true; };
-  }, [open, messageId, messages, originalText]);
+  }, [open, messageId]);
 
   const toggleTerm = (index: number) => {
     setTerms((prev) =>
