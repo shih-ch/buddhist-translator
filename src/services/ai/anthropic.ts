@@ -25,6 +25,19 @@ function buildHeaders(apiKey: string): Record<string, string> {
 }
 
 /**
+ * A safety-classifier decline comes back as a *successful* HTTP 200 with
+ * `stop_reason: "refusal"` and empty (or partial) content — not an error status.
+ * Without this the caller would just render a blank translation with no
+ * explanation. Claude Fable 5 runs these classifiers most aggressively.
+ */
+function refusalError(stopDetails: { category?: string } | null | undefined): Error {
+  const category = stopDetails?.category;
+  return new Error(
+    `模型安全機制拒絕了這次請求${category ? `（類別：${category}）` : ''}，請改用其他模型重試。`
+  );
+}
+
+/**
  * Anthropic uses a separate top-level `system` field rather than a system message in `messages`.
  * Extract system prompt and convert messages accordingly.
  */
@@ -74,6 +87,9 @@ async function callNonStreaming(
   }
 
   const data = await res.json();
+  if (data.stop_reason === 'refusal') {
+    throw refusalError(data.stop_details);
+  }
   const content = data.content?.map((b: { text: string }) => b.text).join('') ?? '';
 
   return {
@@ -125,6 +141,10 @@ async function callStreaming(
   let buffer = '';
   let inputTokens = 0;
   let outputTokens = 0;
+  // Set from message_delta; thrown after the read loop — throwing inside it would
+  // be swallowed by the malformed-JSON catch below.
+  let refused = false;
+  let refusalDetails: { category?: string } | null | undefined;
 
   try {
     while (true) {
@@ -155,6 +175,11 @@ async function callStreaming(
           if (json.type === 'message_delta' && json.usage) {
             outputTokens = json.usage.output_tokens ?? 0;
           }
+
+          if (json.type === 'message_delta' && json.delta?.stop_reason === 'refusal') {
+            refused = true;
+            refusalDetails = json.delta.stop_details ?? json.stop_details;
+          }
         } catch {
           // skip malformed JSON lines
         }
@@ -163,6 +188,12 @@ async function callStreaming(
   } catch (err) {
     stream.onError(err instanceof Error ? err : new Error(String(err)));
     throw err;
+  }
+
+  if (refused) {
+    const error = refusalError(refusalDetails);
+    stream.onError(error);
+    throw error;
   }
 
   const usage = {

@@ -38,6 +38,8 @@ export const AI_PROVIDERS: Record<AIProviderId, { name: string; models: AIModel[
     name: 'Anthropic',
     models: [
       // Current — newest first
+      // Fable 5 是最高階（也最貴）的一階；需組織開啟 30 天資料保留才能呼叫。
+      { id: 'claude-fable-5', name: 'Claude Fable 5', inputPrice: 10, outputPrice: 50 },
       { id: 'claude-opus-5', name: 'Claude Opus 5', inputPrice: 5, outputPrice: 25 },
       { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', inputPrice: 3, outputPrice: 15 },
       { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', inputPrice: 1, outputPrice: 5 },
