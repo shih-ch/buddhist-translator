@@ -65,6 +65,10 @@ export function TermList({ terms, onEdit, onDelete, onDeleteBatch }: TermListPro
     return sortAsc ? cmp : -cmp
   }), [terms, sortKey, sortAsc])
 
+  // React Compiler skips memoizing this component because useVirtualizer returns
+  // non-memoizable functions. That's accepted: virtualization is what keeps a
+  // 32K-term glossary usable, and the compiler isn't enabled in this build.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: sorted.length,
     getScrollElement: () => parentRef.current,
