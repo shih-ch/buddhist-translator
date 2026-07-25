@@ -24,19 +24,20 @@ import { parseCSV } from '@/utils/csvParser'
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS)
 const ALL_LANGUAGES = Object.keys(LANGUAGE_LABELS)
+// Stable identity: an inline `?? []` fallback is a new array on every render,
+// which invalidates every useMemo below (re-filtering the whole 32K-term list).
+const EMPTY_TERMS: GlossaryTerm[] = []
 
 export function GlossaryPageContent() {
-  const {
-    glossary,
-    isLoading,
-    fetchGlossary,
-    addTerm,
-    addTermsBatch,
-    updateTerm,
-    deleteTerm,
-    deleteTermsBatch,
-    exportCsv,
-  } = useGlossaryStore()
+  const glossary = useGlossaryStore((s) => s.glossary)
+  const isLoading = useGlossaryStore((s) => s.isLoading)
+  const fetchGlossary = useGlossaryStore((s) => s.fetchGlossary)
+  const addTerm = useGlossaryStore((s) => s.addTerm)
+  const addTermsBatch = useGlossaryStore((s) => s.addTermsBatch)
+  const updateTerm = useGlossaryStore((s) => s.updateTerm)
+  const deleteTerm = useGlossaryStore((s) => s.deleteTerm)
+  const deleteTermsBatch = useGlossaryStore((s) => s.deleteTermsBatch)
+  const exportCsv = useGlossaryStore((s) => s.exportCsv)
 
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -58,7 +59,7 @@ export function GlossaryPageContent() {
     return () => clearTimeout(timer)
   }, [search])
 
-  const allTerms = glossary?.terms ?? []
+  const allTerms = useMemo(() => glossary?.terms ?? EMPTY_TERMS, [glossary])
   const emptyTranslationCount = useMemo(() => allTerms.filter((t) => !t.translation.trim()).length, [allTerms])
   const aiTranslatedCount = useMemo(() => allTerms.filter((t) => (t.notes || '').includes('[AI翻譯]')).length, [allTerms])
 
