@@ -1,7 +1,9 @@
 import { useMemo, useState, Component, type ReactNode, type HTMLAttributes } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Options as MarkdownOptions } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
+import { markdownSanitizeSchema } from '@/services/markdownSanitize';
 import { parseMarkdown } from '@/services/markdownUtils';
 import { useGlossaryStore } from '@/stores/glossaryStore';
 import { Button } from '@/components/ui/button';
@@ -10,6 +12,15 @@ import type { GlossaryTerm } from '@/types/glossary';
 import { CATEGORY_LABELS, escapeRegExp } from '@/services/glossaryAnnotator';
 
 const EMPTY_TERMS: GlossaryTerm[] = [];
+
+// Module-level so the plugin list keeps a stable identity across renders.
+// rehypeRaw parses the raw HTML, rehypeSanitize then drops anything we don't use
+// (notably <script>) — see services/markdownSanitize.ts for why that matters.
+const REMARK_PLUGINS: MarkdownOptions['remarkPlugins'] = [remarkGfm];
+const REHYPE_PLUGINS: MarkdownOptions['rehypePlugins'] = [
+  rehypeRaw,
+  [rehypeSanitize, markdownSanitizeSchema],
+];
 
 interface MarkdownPreviewProps {
   content: string;
@@ -194,8 +205,8 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
 
   const markdownContent = (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeRaw]}
+      remarkPlugins={REMARK_PLUGINS}
+      rehypePlugins={REHYPE_PLUGINS}
       components={{
         ...highlightComponents,
         details: ({ node: _, ...props }: HTMLAttributes<HTMLDetailsElement> & { node?: unknown }) => (
@@ -213,8 +224,8 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
   // Fallback: render without highlighting
   const fallbackContent = (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeRaw]}
+      remarkPlugins={REMARK_PLUGINS}
+      rehypePlugins={REHYPE_PLUGINS}
       components={{
         details: ({ node: _, ...props }: HTMLAttributes<HTMLDetailsElement> & { node?: unknown }) => (
           <details className="my-4 rounded border bg-muted/20 p-4" {...props} />
