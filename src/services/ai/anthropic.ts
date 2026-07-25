@@ -7,6 +7,14 @@ const ANTHROPIC_MODELS: AIModel[] = [
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 
+// max_tokens caps thinking + response text together, and Claude Opus 5 thinks by
+// default — 8192 left long translations truncated mid-text. Streaming can afford
+// a lot more headroom; the non-streaming AI functions stay lower so the request
+// finishes inside the HTTP timeout. Both are within every current model's ceiling
+// (Haiku 4.5 is the lowest at 64K).
+const MAX_TOKENS_STREAM = 32000;
+const MAX_TOKENS_NON_STREAM = 16000;
+
 function buildHeaders(apiKey: string): Record<string, string> {
   return {
     'content-type': 'application/json',
@@ -48,7 +56,7 @@ async function callNonStreaming(
 
   const body: Record<string, unknown> = {
     model,
-    max_tokens: 8192,
+    max_tokens: MAX_TOKENS_NON_STREAM,
     messages: apiMessages,
   };
   if (system) body.system = system;
@@ -91,7 +99,7 @@ async function callStreaming(
 
   const body: Record<string, unknown> = {
     model,
-    max_tokens: 8192,
+    max_tokens: MAX_TOKENS_STREAM,
     messages: apiMessages,
     stream: true,
   };
