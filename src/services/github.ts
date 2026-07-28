@@ -136,6 +136,24 @@ class GitHubService {
     })
   }
 
+  /**
+   * Every blob in the repo, via the Git Tree API (which returns proper Unicode
+   * paths, unlike the Contents API). `size` lets callers skip files the Contents
+   * API can't return — it truncates above 1MB.
+   */
+  async listAllFiles(): Promise<{ path: string; sha: string; size: number }[]> {
+    const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/git/trees/${this.branch}?recursive=1`
+    const res = await this.apiFetch(url)
+    const data = await res.json()
+    return (data.tree ?? [])
+      .filter((item: { type: string }) => item.type === 'blob')
+      .map((item: { path: string; sha: string; size?: number }) => ({
+        path: item.path,
+        sha: item.sha,
+        size: item.size ?? 0,
+      }))
+  }
+
   /** Get just the SHA of a file without downloading content (works for >1MB files) */
   async getFileSha(filePath: string): Promise<string> {
     const dir = filePath.includes('/') ? filePath.substring(0, filePath.lastIndexOf('/')) : ''
