@@ -11,6 +11,24 @@ const PARAM_LABELS: Record<string, string> = {
   mantraTranslit: '咒語/梵語轉寫',
   onlyVerseMantra: '只輸出偈頌/咒語段',
   proofreadMode: '勘誤模式',
+  relayLanguage: '中繼翻譯',
+};
+
+/** Matches the options in MetadataForm's 原文語言 select. */
+const LANGUAGE_LABELS: Record<string, string> = {
+  ru: '俄文',
+  en: '英文',
+  bo: '藏文',
+  zh: '中文',
+  sa: '梵文',
+  pi: '巴利文',
+  other: '其他',
+};
+
+const RELAY_LABELS: Record<string, string> = {
+  none: '不使用（直接譯為繁中）',
+  en: '英文（原文 → 英文 → 繁中）',
+  ru: '俄文（原文 → 俄文 → 繁中）',
 };
 
 const BOOLEAN_MAP: Record<string, [string, string]> = {
@@ -40,9 +58,19 @@ const PROOFREAD_LABELS: Record<string, string> = {
 
 /**
  * Format TranslationParams into the parameter block text injected into the user message.
+ *
+ * Every branch the prompt says to decide "依本次參數" must have a line here — a
+ * prompt rule that consults a parameter we never send leaves the model guessing,
+ * and it guesses differently between runs.
  */
-export function formatParamsBlock(params: TranslationParams): string {
+export function formatParamsBlock(params: TranslationParams, originalLanguage?: string): string {
   const lines: string[] = ['【本次參數】'];
+
+  // The prompt's five-column format and transliteration rules key off the source
+  // language; without this the model has to infer it from the text itself.
+  lines.push(
+    `- 原文語言：${originalLanguage ? LANGUAGE_LABELS[originalLanguage] ?? originalLanguage : '未指定（請自行判斷）'}`
+  );
 
   for (const [key, label] of Object.entries(PARAM_LABELS)) {
     const value = params[key as keyof TranslationParams];
@@ -56,6 +84,8 @@ export function formatParamsBlock(params: TranslationParams): string {
       lines.push(`- ${label}：${MANTRA_TRANSLIT_LABELS[value as string] ?? value}`);
     } else if (key === 'proofreadMode') {
       lines.push(`- ${label}：${PROOFREAD_LABELS[value as string] ?? value}`);
+    } else if (key === 'relayLanguage') {
+      lines.push(`- ${label}：${RELAY_LABELS[(value as string) || 'none'] ?? value}`);
     }
   }
 
@@ -100,19 +130,37 @@ export function formatGlossaryBlock(terms: GlossaryTerm[]): string {
  * user   = params block + original text
  * Then append any prior chat history (correction rounds).
  */
+export interface TranslationContext {
+  /** metadata.original_language — 'ru' | 'bo' | 'sa' | … */
+  originalLanguage?: string;
+  /**
+   * When relay translation is on, the pre-translated draft. The *original* text
+   * stays as 【原文】 so the verbatim-source columns (five-column mode) quote the
+   * real source rather than the relay draft.
+   */
+  relayDraft?: { language: string; text: string };
+}
+
 export function buildTranslationMessages(
   systemPrompt: string,
   originalText: string,
   params: TranslationParams,
   glossaryTerms: GlossaryTerm[],
-  chatHistory: AIMessage[]
+  chatHistory: AIMessage[],
+  context: TranslationContext = {}
 ): AIMessage[] {
   const filteredTerms = filterRelevantTerms(glossaryTerms, originalText);
   const glossaryBlock = formatGlossaryBlock(filteredTerms);
   const fullSystem = systemPrompt + glossaryBlock;
 
-  const paramsBlock = formatParamsBlock(params);
-  const userContent = `${paramsBlock}\n\n【原文】\n${originalText}`;
+  const paramsBlock = formatParamsBlock(params, context.originalLanguage);
+  let userContent = `${paramsBlock}\n\n【原文】\n${originalText}`;
+  if (context.relayDraft) {
+    const label = LANGUAGE_LABELS[context.relayDraft.language] ?? context.relayDraft.language;
+    userContent +=
+      `\n\n【中繼稿（原文 → ${label}）】\n${context.relayDraft.text}` +
+      `\n\n中繼稿由系統預先產生，請以它為主要翻譯依據；但凡需要逐字引用原文的欄位，一律引用上方【原文】，不要引用中繼稿。`;
+  }
 
   const messages: AIMessage[] = [
     { role: 'system', content: fullSystem },
@@ -140,12 +188,13 @@ export function buildRetranslationMessages(
   selectedTranslation: string,
   params: TranslationParams,
   glossaryTerms: GlossaryTerm[],
+  context: TranslationContext = {}
 ): AIMessage[] {
   const filteredTerms = filterRelevantTerms(glossaryTerms, fullOriginalText);
   const glossaryBlock = formatGlossaryBlock(filteredTerms);
   const fullSystem = systemPrompt + glossaryBlock;
 
-  const paramsBlock = formatParamsBlock(params);
+  const paramsBlock = formatParamsBlock(params, context.originalLanguage);
   const userContent = `${paramsBlock}\n\n【完整原文】\n${fullOriginalText}\n\n【需重新翻譯的譯文段落】\n${selectedTranslation}\n\n請根據完整原文，找到與上述譯文段落對應的原文段落，重新翻譯。只輸出重新翻譯的結果。`;
 
   return [
@@ -182,12 +231,26 @@ export function buildTermExtractionMessages(
   originalText: string,
   translatedText: string
 ): AIMessage[] {
-  const filled = systemPrompt
-    .replace('{original_text}', originalText)
-    .replace('{translated_text}', translatedText);
+  // The prompt is user-editable, so both shapes exist in the wild: templates with
+  // {original_text}/{translated_text} placeholders, and plain instruction-only
+  // ones. Send the article through exactly one of them — filling the placeholders
+  // *and* repeating the text in the user turn doubled the input tokens on every
+  // extraction.
+  const hasPlaceholder =
+    systemPrompt.includes('{original_text}') || systemPrompt.includes('{translated_text}');
+
+  if (hasPlaceholder) {
+    const filled = systemPrompt
+      .replaceAll('{original_text}', originalText)
+      .replaceAll('{translated_text}', translatedText);
+    return [
+      { role: 'system', content: filled },
+      { role: 'user', content: '請依上述規則提取術語，只回傳 JSON 陣列。' },
+    ];
+  }
 
   return [
-    { role: 'system', content: filled },
+    { role: 'system', content: systemPrompt },
     { role: 'user', content: `【原文】\n${originalText}\n\n【譯文】\n${translatedText}` },
   ];
 }

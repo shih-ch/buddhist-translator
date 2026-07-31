@@ -104,7 +104,10 @@ export async function performSendMessage(content: string, get: TranslatorStoreGe
 
     // ── Relay translation: first translate to intermediate language ──
     const relay = state.translationParams.relayLanguage;
-    let textForTranslation = content;
+    // The relay draft is passed alongside the original rather than replacing it:
+    // five-column mode has to quote the real source verbatim, and feeding it the
+    // English draft as "原文" made that column wrong.
+    let relayDraft: { language: string; text: string } | undefined;
     if (relay && relay !== 'none' && state.messages.length === 0) {
       const relayLangName = relay === 'en' ? 'English' : 'Russian';
       const relayMessages: AIMessage[] = [
@@ -134,7 +137,7 @@ export async function performSendMessage(content: string, get: TranslatorStoreGe
           overrideModel: state.currentModel.model,
         }
       );
-      textForTranslation = relayResponse.content;
+      relayDraft = { language: relay, text: relayResponse.content };
 
       // Clear the progress message for the real translation
       set((s) => {
@@ -156,17 +159,19 @@ export async function performSendMessage(content: string, get: TranslatorStoreGe
         messages = buildRetranslationMessages(
           fnConfig.prompt,
           state.originalText,
-          textForTranslation,
+          content,
           state.translationParams,
           glossaryTerms,
+          { originalLanguage: state.metadata.original_language }
         );
       } else {
         messages = buildTranslationMessages(
           fnConfig.prompt,
-          textForTranslation,
+          content,
           state.translationParams,
           glossaryTerms,
-          []
+          [],
+          { originalLanguage: state.metadata.original_language, relayDraft }
         );
       }
     } else {
@@ -181,7 +186,8 @@ export async function performSendMessage(content: string, get: TranslatorStoreGe
         state.originalText,
         state.translationParams,
         glossaryTerms,
-        chatHistory
+        chatHistory,
+        { originalLanguage: state.metadata.original_language }
       );
     }
 

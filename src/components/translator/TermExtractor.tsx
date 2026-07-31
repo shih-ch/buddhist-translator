@@ -25,6 +25,8 @@ interface ExtractedTerm {
   original: string;
   translation: string;
   sanskrit: string;
+  tibetan: string;
+  wylie: string;
   category: string;
   notes: string;
   selected: boolean;
@@ -95,10 +97,21 @@ export function TermExtractor({ open, onClose, messageId }: TermExtractorProps) 
             original: string;
             translation: string;
             sanskrit: string;
+            tibetan?: string;
+            wylie?: string;
             category: string;
             notes: string;
           }>;
-          setTerms(extracted.map((t) => ({ ...t, selected: true })));
+          // tibetan/wylie are newer fields — a customised prompt may not ask for
+          // them, so default rather than letting undefined reach the glossary.
+          setTerms(
+            extracted.map((t) => ({
+              ...t,
+              tibetan: t.tibetan ?? '',
+              wylie: t.wylie ?? '',
+              selected: true,
+            }))
+          );
         } catch {
           toast.error('術語提取結果解析失敗');
           setTerms([]);
@@ -142,13 +155,15 @@ export function TermExtractor({ open, onClose, messageId }: TermExtractorProps) 
       original: t.original,
       translation: t.translation,
       sanskrit: t.sanskrit || '',
-      language: 'sanskrit' as const,
+      // Was hard-coded to 'sanskrit', which mislabelled every Tibetan term and
+      // broke the glossary's language filter for them.
+      language: (t.sanskrit ? 'sanskrit' : t.tibetan || t.wylie ? 'tibetan' : 'other') as GlossaryTerm['language'],
       category: t.category as GlossaryTerm['category'],
       notes: t.notes || '',
       added_at: new Date().toISOString(),
       source_article: metadata.title || '',
-      tibetan: '',
-      wylie: '',
+      tibetan: t.tibetan || '',
+      wylie: t.wylie || '',
       definition: '',
       link: '',
     }));
