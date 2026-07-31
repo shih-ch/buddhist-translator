@@ -7,6 +7,11 @@ export const AI_PROVIDERS: Record<AIProviderId, { name: string; models: AIModel[
   openai: {
     name: 'OpenAI',
     models: [
+      // GPT-5.6 家族：Sol 旗艦 / Terra 均衡 / Luna 最快最省。
+      // 這一代改用 Sol/Terra/Luna 命名，不對應舊的 pro/mini/nano 分層，所以擺在一起。
+      { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', inputPrice: 5, outputPrice: 30 },
+      { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', inputPrice: 2, outputPrice: 12 },
+      { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna', inputPrice: 0.2, outputPrice: 1.2 },
       // Flagship — newest first
       { id: 'gpt-5.5', name: 'GPT-5.5', inputPrice: 5, outputPrice: 30 },
       { id: 'gpt-5.5-pro', name: 'GPT-5.5 Pro', inputPrice: 30, outputPrice: 180 },
