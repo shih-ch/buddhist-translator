@@ -1,7 +1,8 @@
 import type { AIProviderId } from '@/types/settings'
 import type { AIModel } from '@/types/chat'
 
-export const DEFAULT_TRANSLATION_MODEL = { provider: 'openai' as AIProviderId, model: 'gpt-5.4' }
+/** Initial model for a fresh translator session — kept in step with RECOMMENDED_MODELS.translation. */
+export const DEFAULT_TRANSLATION_MODEL = { provider: 'anthropic' as AIProviderId, model: 'claude-opus-5' }
 
 export const AI_PROVIDERS: Record<AIProviderId, { name: string; models: AIModel[] }> = {
   openai: {
