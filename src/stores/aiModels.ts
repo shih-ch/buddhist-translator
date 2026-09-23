@@ -2,14 +2,16 @@ import type { AIProviderId } from '@/types/settings'
 import type { AIModel } from '@/types/chat'
 
 /** Initial model for a fresh translator session — kept in step with RECOMMENDED_MODELS.translation. */
-export const DEFAULT_TRANSLATION_MODEL = { provider: 'anthropic' as AIProviderId, model: 'claude-opus-5' }
+export const DEFAULT_TRANSLATION_MODEL = { provider: 'anthropic' as AIProviderId, model: 'claude-opus-5-5' }
 
 export const AI_PROVIDERS: Record<AIProviderId, { name: string; models: AIModel[] }> = {
   openai: {
     name: 'OpenAI',
     models: [
-      // GPT-6 家族
+      // GPT-6 家族：Astra 旗艦 / Sol 均衡 / Luna 最快最省
       { id: 'gpt-6-astra', name: 'GPT-6 Astra', inputPrice: 10, outputPrice: 50 },
+      { id: 'gpt-6-sol', name: 'GPT-6 Sol', inputPrice: 2, outputPrice: 10 },
+      { id: 'gpt-6-luna', name: 'GPT-6 Luna', inputPrice: 0.1, outputPrice: 0.5 },
       // GPT-5.6 家族：Sol 旗艦 / Terra 均衡 / Luna 最快最省。
       // 這一代改用 Sol/Terra/Luna 命名，不對應舊的 pro/mini/nano 分層，所以擺在一起。
       // Sol 的 $4/$20 是促銷價，官方載明至少維持到 2026-11-21，之後要回頭核對。
@@ -49,12 +51,14 @@ export const AI_PROVIDERS: Record<AIProviderId, { name: string; models: AIModel[
       // Current — newest first
       // Fable 5.1 是最高階（也最貴）的一階；需組織開啟 30 天資料保留才能呼叫。
       { id: 'claude-fable-5-1', name: 'Claude Fable 5.1', inputPrice: 10, outputPrice: 50 },
-      { id: 'claude-opus-5', name: 'Claude Opus 5', inputPrice: 5, outputPrice: 25 },
+      // Opus 5.5 比 Opus 5 更新也更便宜（$4/$20 vs $5/$25），官方建議一般工作從它開始。
+      { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', inputPrice: 4, outputPrice: 20 },
       // Sonnet 5 的 $2/$10 原為推廣價，官方已於 2026-09 宣布轉為正式價。
       { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', inputPrice: 2, outputPrice: 10 },
       { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', inputPrice: 1, outputPrice: 5 },
       // Legacy (still available)
       { id: 'claude-fable-5', name: 'Claude Fable 5 (legacy)', inputPrice: 10, outputPrice: 50 },
+      { id: 'claude-opus-5', name: 'Claude Opus 5 (legacy)', inputPrice: 5, outputPrice: 25 },
       { id: 'claude-opus-4-8', name: 'Claude Opus 4.8 (legacy)', inputPrice: 5, outputPrice: 25 },
       { id: 'claude-opus-4-7', name: 'Claude Opus 4.7 (legacy)', inputPrice: 5, outputPrice: 25 },
       { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6 (legacy)', inputPrice: 3, outputPrice: 15 },
@@ -71,10 +75,11 @@ export const AI_PROVIDERS: Record<AIProviderId, { name: string; models: AIModel[
       { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', inputPrice: 0.75, outputPrice: 3.75 },
       { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', inputPrice: 0.75, outputPrice: 3.75 },
       { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', inputPrice: 0.75, outputPrice: 3.75 },
+      { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', inputPrice: 1.5, outputPrice: 9 },
       { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite', inputPrice: 0.3, outputPrice: 2.5 },
+      { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite', inputPrice: 0.25, outputPrice: 1.5 },
       // Pro 的價格是 ≤200K prompt 的級距；超過會跳到 $4/$18。
       { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro (Preview)', inputPrice: 2, outputPrice: 12 },
-      // gemini-3-flash-preview / gemini-3.1-flash-lite-preview 已被上面的 stable 版取代
       // Gemini 2.5 Series
       { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', inputPrice: 1.25, outputPrice: 10 },
       { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', inputPrice: 0.3, outputPrice: 2.5 },
