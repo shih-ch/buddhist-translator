@@ -99,6 +99,51 @@ npm run dev
 http://localhost:5178/buddhist-translator/
 ```
 
+#### 開機自動啟動（Linux，選擇性）
+
+不想每次開機都手動 `npm run dev`，可以做成 systemd user service。建立 `~/.config/systemd/user/buddhist-translator-dev.service`：
+
+```ini
+[Unit]
+Description=Buddhist Translator dev server (Vite, port 5178)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/path/to/buddhist-translator
+# systemd 讀不到 shell 的 PATH；用 nvm 的話要寫出 node 的實際路徑（`which node` 查）
+Environment=PATH=/home/<you>/.nvm/versions/node/<version>/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/<you>/.nvm/versions/node/<version>/bin/npm run dev
+Restart=on-failure
+RestartSec=5
+# 專案放在外接硬碟時，開機若尚未掛載就持續重試
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=default.target
+```
+
+啟用並立刻啟動：
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now buddhist-translator-dev
+loginctl enable-linger $USER   # 開機即啟動，不必先登入
+```
+
+日常管理：
+
+```bash
+systemctl --user status buddhist-translator-dev    # 狀態
+systemctl --user restart buddhist-translator-dev   # 重啟
+systemctl --user stop buddhist-translator-dev      # 停止
+journalctl --user -u buddhist-translator-dev -f    # 即時日誌
+systemctl --user disable --now buddhist-translator-dev   # 取消自動啟動
+```
+
+> ⚠️ 用 nvm 升級 Node 後，記得把單元檔裡的 node 路徑一起改掉，否則服務會啟動失敗。
+> 服務改由 systemd 管理後，請用 `systemctl --user stop` 停止，不要用 `npm run stop`。
+
 ### 第四步：建置生產版本
 
 ```bash
