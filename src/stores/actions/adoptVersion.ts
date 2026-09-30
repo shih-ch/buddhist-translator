@@ -10,6 +10,29 @@ import { logTranslation } from '@/services/translationLogger';
 import { persistVersions } from './versionStorage';
 import { toast } from 'sonner';
 
+/**
+ * Pull the first JSON object out of a model reply. Models sometimes wrap it in
+ * a code fence or add a sentence around it; JSON.parse on the raw reply then
+ * failed and the extraction silently came back empty.
+ */
+function parseJsonObject(reply: string): Record<string, unknown> {
+  const fenced = reply.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const body = fenced ? fenced[1] : reply;
+  const start = body.indexOf('{');
+  const end = body.lastIndexOf('}');
+  if (start === -1 || end <= start) throw new Error('模型沒有回傳 JSON');
+  return JSON.parse(body.slice(start, end + 1));
+}
+
+/**
+ * Author names are as likely to be a signature at the end of a teaching as a
+ * byline at the top, so send both ends of a long original.
+ */
+function headAndTail(text: string, head = 2000, tail = 1000): string {
+  if (text.length <= head + tail) return text;
+  return `${text.slice(0, head)}\n\n[……中略……]\n\n${text.slice(-tail)}`;
+}
+
 /** Use AI to extract metadata (title, author) from translated content */
 async function extractMetadataFromContent(
   content: string,
@@ -18,56 +41,46 @@ async function extractMetadataFromContent(
   model: string,
   fields: { title: boolean; author: boolean },
 ): Promise<{ title?: string; author?: string }> {
-  try {
-    const apiKeys = useSettingsStore.getState().apiKeys;
-    if (!apiKeys[provider]) return {};
+  const apiKeys = useSettingsStore.getState().apiKeys;
+  if (!apiKeys[provider]) throw new Error(`未設定 ${provider} 的 API Key`);
 
-    const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('translation');
+  const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('translation');
 
-    const requests: string[] = [];
-    if (fields.title) requests.push('title: 根據內容生成一個簡潔的繁體中文標題');
-    if (fields.author) requests.push('author: 從原文或譯文中找出文章作者姓名（保留原文語言）');
+  const requests: string[] = [];
+  if (fields.title) requests.push('title: 根據內容生成一個簡潔的繁體中文標題');
+  if (fields.author) requests.push('author: 從原文或譯文中找出文章作者姓名（保留原文語言）');
 
-    const messages: AIMessage[] = [
-      {
-        role: 'system',
-        content: `你是佛學文章元資料提取器。請從以下內容中提取資訊。
+  const messages: AIMessage[] = [
+    {
+      role: 'system',
+      content: `你是佛學文章元資料提取器。請從以下內容中提取資訊。
 以 JSON 格式回覆，只包含以下欄位：
 ${requests.join('\n')}
 
 只回覆 JSON，不要加其他說明。例如：{"title": "標題", "author": "作者"}`,
-      },
-      {
-        role: 'user',
-        content: `【譯文】\n${content.slice(0, 1500)}\n\n【原文】\n${originalText.slice(0, 1500)}`,
-      },
-    ];
+    },
+    {
+      role: 'user',
+      content: `【譯文】\n${content.slice(0, 1500)}\n\n【原文】\n${headAndTail(originalText)}`,
+    },
+  ];
 
-    const response = await callFunction(
-      { ...fnConfig, provider, model },
-      apiKeys,
-      messages,
-      { overrideProvider: provider, overrideModel: model },
-    );
+  const response = await callFunction(
+    { ...fnConfig, provider, model },
+    apiKeys,
+    messages,
+    { overrideProvider: provider, overrideModel: model },
+  );
 
-    // Parse JSON from response (handle markdown code blocks)
-    let text = response.content.trim();
-    const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (codeBlock) text = codeBlock[1].trim();
-
-    const parsed = JSON.parse(text);
-    const result: { title?: string; author?: string } = {};
-    if (fields.title && parsed.title) {
-      result.title = String(parsed.title).replace(/^["「『]|["」』]$/g, '');
-    }
-    if (fields.author && parsed.author) {
-      result.author = String(parsed.author).trim();
-    }
-    return result;
-  } catch (err) {
-    console.error('[extractMetadata] error:', err);
-    return {};
+  const parsed = parseJsonObject(response.content);
+  const result: { title?: string; author?: string } = {};
+  if (fields.title && parsed.title) {
+    result.title = String(parsed.title).replace(/^["「『]|["」』]$/g, '');
   }
+  if (fields.author && parsed.author) {
+    result.author = String(parsed.author).trim();
+  }
+  return result;
 }
 
 export function performAdoptVersion(messageId: string, get: TranslatorStoreGet, set: TranslatorStoreSet): void {
