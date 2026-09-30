@@ -40,6 +40,8 @@ async function extractMetadataFromContent(
   provider: AIProviderId,
   model: string,
   fields: { title: boolean; author: boolean },
+  /** The source article's own title, if one came in with the import. */
+  sourceTitle?: string,
 ): Promise<{ title?: string; author?: string }> {
   const apiKeys = useSettingsStore.getState().apiKeys;
   if (!apiKeys[provider]) throw new Error(`未設定 ${provider} 的 API Key`);
@@ -47,7 +49,13 @@ async function extractMetadataFromContent(
   const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('translation');
 
   const requests: string[] = [];
-  if (fields.title) requests.push('title: 根據內容生成一個簡潔的繁體中文標題');
+  if (fields.title) {
+    requests.push(
+      sourceTitle
+        ? `title: 將原文標題「${sourceTitle}」忠實翻譯成簡潔的繁體中文標題，不要另外發想`
+        : 'title: 根據內容生成一個簡潔的繁體中文標題'
+    );
+  }
   if (fields.author) requests.push('author: 從原文或譯文中找出文章作者姓名（保留原文語言）');
 
   const messages: AIMessage[] = [
@@ -128,8 +136,11 @@ export function performAdoptVersion(messageId: string, get: TranslatorStoreGet, 
     );
   }
 
-  // If title or author is empty, ask AI to extract from content
-  const needTitle = !metadata.title.trim();
+  // A title with no Chinese in it is the source article's own title — URL import
+  // fills the field from the page, in the original language. Treating it as
+  // "already has a title" meant no zh-TW title was ever generated for imports.
+  const currentTitle = metadata.title.trim();
+  const needTitle = !currentTitle || !/[\u3400-\u9fff\uf900-\ufaff]/.test(currentTitle);
   const needAuthor = !metadata.author.trim();
   if (needTitle || needAuthor) {
     extractMetadataFromContent(
@@ -138,6 +149,7 @@ export function performAdoptVersion(messageId: string, get: TranslatorStoreGet, 
       state.currentModel.provider,
       state.currentModel.model,
       { title: needTitle, author: needAuthor },
+      needTitle && currentTitle ? currentTitle : undefined,
     ).then((extracted) => {
       // Guard: if store was reset while extraction was in-flight, skip
       const latest = get();
