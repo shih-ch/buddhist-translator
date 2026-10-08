@@ -112,7 +112,14 @@ class GitHubService {
       Accept: 'application/vnd.github.v3+json',
       ...(options.headers as Record<string, string> ?? {}),
     }
-    const res = await fetch(url, { ...options, headers })
+    // GitHub answers with `Cache-Control: private, max-age=60`, so a plain fetch
+    // let the browser serve a listing up to a minute old. A save made within a
+    // minute of the previous one then read the pre-save SHA, PUT it and got a
+    // 409 — and the conflict retry re-read the same cached listing and failed
+    // again. 'no-cache' always revalidates with the ETag: fresh data, and an
+    // unchanged resource still comes back as a 304, which GitHub doesn't count
+    // against the rate limit.
+    const res = await fetch(url, { cache: 'no-cache', ...options, headers })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
       throw new Error(`GitHub API ${res.status}: ${body}`)
