@@ -8,6 +8,7 @@ import { DEFAULT_TRANSLATION_MODEL } from '@/stores/aiModels';
 import { performSendMessage, genId } from './actions/sendMessage';
 import { performAdoptVersion } from './actions/adoptVersion';
 import { loadVersions, persistVersions } from './actions/versionStorage';
+import { loadDraft, scheduleDraftSave, flushDraft } from './actions/draftStorage';
 import { toast } from 'sonner';
 
 export type { ArticleImage, SavedVersion } from '@/types/translator';
@@ -97,13 +98,24 @@ export interface TranslatorState {
 export type TranslatorStoreGet = StoreApi<TranslatorState>['getState'];
 export type TranslatorStoreSet = StoreApi<TranslatorState>['setState'];
 
+// Work in progress lives only in this store, so a reload, a crash or a
+// dev-server hot update used to wipe it. It is mirrored to localStorage and
+// restored here.
+const restored = loadDraft();
+
+/** When the restored draft was last saved, for the page to announce once. */
+let draftRestoredAt: number | null = restored?.savedAt ?? null;
+export function consumeDraftRestoredAt(): number | null {
+  const at = draftRestoredAt;
+  draftRestoredAt = null;
+  return at;
+}
+
 export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   // Initial state
   inputMode: 'paste',
   originalText: '',
   importedText: '',
-  metadata: { ...DEFAULT_FRONTMATTER },
-  translationParams: { ...DEFAULT_PARAMS },
   activePreset: '一般文章',
   messages: [],
   isLoading: false,
@@ -117,6 +129,11 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
   editingArticle: null,
   abortController: null,
   replacementRange: null,
+  ...restored?.draft,
+  // Merge rather than replace so a draft saved before a field existed still
+  // gets that field's default.
+  metadata: { ...DEFAULT_FRONTMATTER, ...restored?.draft.metadata },
+  translationParams: { ...DEFAULT_PARAMS, ...restored?.draft.translationParams },
 
   setInputMode: (mode) => set({ inputMode: mode }),
   setOriginalText: (text) => set({ originalText: text }),
@@ -257,3 +274,22 @@ export const useTranslatorStore = create<TranslatorState>((set, get) => ({
     });
   },
 }));
+
+const unsubscribeDraft = useTranslatorStore.subscribe(scheduleDraftSave);
+const flushWhenHidden = () => {
+  if (document.visibilityState === 'hidden') flushDraft();
+};
+window.addEventListener('pagehide', flushDraft);
+document.addEventListener('visibilitychange', flushWhenHidden);
+
+if (import.meta.hot) {
+  // A hot update re-runs this module and builds a fresh store from the draft,
+  // so write out anything still pending first, and detach the old store: a
+  // stream still writing into it must not overwrite the restored draft.
+  import.meta.hot.dispose(() => {
+    flushDraft();
+    unsubscribeDraft();
+    window.removeEventListener('pagehide', flushDraft);
+    document.removeEventListener('visibilitychange', flushWhenHidden);
+  });
+}

@@ -10,7 +10,7 @@ import { PreviewPanel } from './PreviewPanel';
 import { BatchPanel } from './BatchPanel';
 import { TMSuggestions } from './TMSuggestions';
 import { DictionaryPanel } from './DictionaryPanel';
-import { useTranslatorStore } from '@/stores/translatorStore';
+import { useTranslatorStore, consumeDraftRestoredAt } from '@/stores/translatorStore';
 import { githubService } from '@/services/github';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { toast } from 'sonner';
@@ -37,6 +37,22 @@ export function TranslatorPage() {
     const editPath = searchParams.get('edit');
     const mode = searchParams.get('mode');
 
+    // Announce a restored draft once — unless this visit opens an article for
+    // editing, which replaces the draft anyway.
+    const restoredAt = consumeDraftRestoredAt();
+    if (restoredAt && !editPath) {
+      const when = new Date(restoredAt).toLocaleString('zh-TW', { hour12: false });
+      // Deferred: this effect runs before <Toaster> (a later sibling in App)
+      // subscribes in its own effect, and sonner drops toasts published with
+      // no subscriber, so a synchronous call here never appears.
+      setTimeout(() => {
+        toast.info(`已恢復上次未完成的翻譯（${when}）`, {
+          duration: 8000,
+          action: { label: '清除，開新翻譯', onClick: () => reset() },
+        });
+      }, 0);
+    }
+
     if (editPath && githubToken) {
       githubService.loadTranslation(editPath)
         .then((article) => loadArticleForEdit(article))
@@ -44,7 +60,7 @@ export function TranslatorPage() {
     } else if (mode === 'import') {
       setInputMode('import');
     }
-  }, [searchParams, githubToken, loadArticleForEdit, setInputMode]);
+  }, [searchParams, githubToken, loadArticleForEdit, setInputMode, reset]);
 
   return (
     <div className="h-full overflow-hidden">
