@@ -65,6 +65,19 @@ const PALI_KEYWORDS = [
   'theravāda', 'abhidhamma', 'vinaya', 'tipiṭaka',
 ]
 
+// English function words. Ordinary English prose is a quarter or more function
+// words; romanized Sanskrit/Pali has almost none ("so", "ca", "na" are left out
+// on purpose — they are real Pali/Sanskrit words).
+const ENGLISH_STOPWORDS = new Set([
+  'the', 'and', 'of', 'to', 'is', 'in', 'that', 'it', 'for', 'as', 'with', 'this',
+  'are', 'be', 'by', 'on', 'not', 'or', 'from', 'which', 'was', 'his', 'her', 'they',
+  'you', 'we', 'our', 'your', 'their', 'has', 'have', 'can', 'will', 'all', 'one',
+  'when', 'there', 'what', 'if', 'but', 'into', 'its', 'also', 'more', 'such',
+  'these', 'those', 'been', 'an',
+])
+
+const LATIN_WORD_RE = /[a-zāīūṛṝḷḹṃḥśṣṭḍṇñṅ]+/g
+
 function countBigrams(text: string, bigrams: Set<string>): number {
   let count = 0
   const lower = text.toLowerCase()
@@ -115,13 +128,31 @@ export function detectLanguageAdvanced(text: string): DetectionResult {
   scores.bo = (tibetanCount / total) * 100
   scores.zh = (cjkCount / total) * 100
 
+  // Tibetan prayers are usually posted with a romanized line and an English line
+  // under each verse, so Latin letters outnumber Tibetan ones — but the source is
+  // still Tibetan. (Not when Cyrillic/CJK outweighs it: that is a Russian or
+  // Chinese article quoting Tibetan.)
+  if (tibetanCount / total >= 0.25 && tibetanCount >= cyrillicCount && tibetanCount >= cjkCount) {
+    scores.bo = Math.max(scores.bo, 100)
+  }
+
   // Devanagari strongly suggests Sanskrit
   if (devanagariCount > 0) {
     scores.sa = (devanagariCount / total) * 100
   }
 
   // Latin text: could be English, Sanskrit (IAST), or Pali
-  if (latinCount / total > 0.2) {
+  const words = sample.toLowerCase().match(LATIN_WORD_RE) || []
+  const englishRatio = words.length
+    ? words.filter((w) => ENGLISH_STOPWORDS.has(w)).length / words.length
+    : 0
+
+  if (latinCount / total > 0.2 && englishRatio >= 0.15) {
+    // English prose. The n-gram counts below are raw counts that grow with text
+    // length, and English is full of 'th' / 'ss' / 'dd' — long English articles
+    // used to come out as Pali.
+    scores.en = (latinCount / total) * 100
+  } else if (latinCount / total > 0.2) {
     const baseLatinScore = (latinCount / total) * 60
 
     // IAST diacritics boost for Sanskrit/Pali

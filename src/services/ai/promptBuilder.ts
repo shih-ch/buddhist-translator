@@ -4,7 +4,9 @@ import type { AIMessage } from './types';
 import { filterRelevantTerms } from '../glossaryFilter';
 
 const PARAM_LABELS: Record<string, string> = {
-  keepOriginalPerLine: '保留原文逐句',
+  // Scope is spelled out here because newer models read a bare "保留原文逐句：是"
+  // as "quote the source above every paragraph", prose included.
+  keepOriginalPerLine: '保留原文逐句（只用於逐句編號的段落）',
   narrativePerLine: '敘述段逐句對照',
   fiveColumnMode: '多語五欄模式',
   tibetanTranslitMode: 'Tibetan 轉寫模式',
@@ -68,8 +70,10 @@ export function formatParamsBlock(params: TranslationParams, originalLanguage?: 
 
   // The prompt's five-column format and transliteration rules key off the source
   // language; without this the model has to infer it from the text itself.
+  // It comes from auto-detection, which can be wrong — say so, or the model
+  // spends a 【疑點】 entry arguing with it.
   lines.push(
-    `- 原文語言：${originalLanguage ? LANGUAGE_LABELS[originalLanguage] ?? originalLanguage : '未指定（請自行判斷）'}`
+    `- 原文語言（系統偵測，僅供參考）：${originalLanguage ? LANGUAGE_LABELS[originalLanguage] ?? originalLanguage : '未指定（請自行判斷）'}`
   );
 
   for (const [key, label] of Object.entries(PARAM_LABELS)) {
@@ -95,7 +99,7 @@ export function formatParamsBlock(params: TranslationParams, originalLanguage?: 
   }
 
   // Fixed rule
-  lines.push('- 漢音規則：僅咒語/偈頌提供；一般敘述句填「—」');
+  lines.push('- 漢音規則：偈頌/咒語每句都給漢音；一般敘述句不給');
 
   return lines.join('\n');
 }

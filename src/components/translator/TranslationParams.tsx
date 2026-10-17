@@ -177,7 +177,7 @@ export function TranslationParams() {
             <div>
               <Label className="text-xs">漢音規則</Label>
               <p className="mt-1 text-xs text-muted-foreground">
-                僅咒語/偈頌提供；敘述句填 —
+                偈頌/咒語每句都給；敘述句不給
               </p>
             </div>
           </div>
