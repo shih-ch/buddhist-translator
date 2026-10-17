@@ -5,6 +5,7 @@ import { Check, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage as ChatMessageType } from '@/types/chat';
+import { hardLineBreaks } from '@/services/markdownUtils';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -43,7 +44,7 @@ export function ChatMessage({ message, onAdopt, onAdoptFull, isStreaming }: Chat
           {isUser ? (
             <p className="m-0 whitespace-pre-wrap">{message.content}</p>
           ) : (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{hardLineBreaks(message.content)}</ReactMarkdown>
           )}
           {isStreaming && <span className="inline-block h-4 w-1 animate-pulse bg-current" />}
         </div>

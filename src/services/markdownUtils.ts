@@ -54,6 +54,41 @@ function parseFrontmatterRaw(md: string): { data: Record<string, unknown>; conte
 }
 
 /**
+ * Make every single newline inside a paragraph a hard line break (two trailing
+ * spaces). Translations lay verse items out one field per line (原文/轉寫/漢音/…);
+ * plain Markdown joins those lines into one run-on paragraph. Older models
+ * added the trailing spaces themselves, newer ones don't. Frontmatter, code
+ * fences, table rows, headings and HTML lines are left alone; idempotent.
+ */
+export function hardLineBreaks(md: string): string {
+  const lines = md.split('\n');
+  let i = 0;
+  if (/^---\r?$/.test(lines[0] ?? '')) {
+    const close = lines.findIndex((l, j) => j > 0 && /^---\r?$/.test(l));
+    if (close > 0) i = close + 1;
+  }
+  let fence = '';
+  for (; i < lines.length - 1; i++) {
+    const line = lines[i];
+    const fenceMark = line.match(/^\s{0,3}(`{3,}|~{3,})/)?.[1];
+    if (fenceMark) {
+      if (!fence) fence = fenceMark[0];
+      else if (fenceMark[0] === fence) fence = '';
+      continue;
+    }
+    const next = lines[i + 1];
+    if (fence || !line.trim() || !next.trim()) continue;
+    const t = line.trimStart();
+    if (t.startsWith('|') || t.startsWith('<') || /^#{1,6}(\s|$)/.test(t)) continue;
+    if (/( {2,}|\\)\r?$/.test(line)) continue;
+    // The line above a setext underline is a heading, not a paragraph line
+    if (/^\s{0,3}(=+|-+)\s*$/.test(next)) continue;
+    lines[i] = line.replace(/[ \t]*(\r?)$/, '  $1');
+  }
+  return lines.join('\n');
+}
+
+/**
  * Assemble a complete Markdown file: frontmatter + body + original text collapsible.
  */
 export function assembleMarkdown(
@@ -93,7 +128,7 @@ export function assembleMarkdown(
   yamlLines.push('---');
 
   let md = yamlLines.join('\n') + '\n\n';
-  md += translatedContent.trim() + '\n';
+  md += hardLineBreaks(translatedContent.trim()) + '\n';
 
   if (images && images.length > 0) {
     md += '\n---\n\n';

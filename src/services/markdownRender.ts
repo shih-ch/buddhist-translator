@@ -1,5 +1,6 @@
 import React from 'react';
 import { markdownSanitizeSchema } from './markdownSanitize';
+import { hardLineBreaks } from './markdownUtils';
 
 /**
  * Render a Markdown string to an HTML string (GFM tables + sanitized raw HTML).
@@ -20,7 +21,7 @@ export async function renderMarkdownToHtml(markdown: string): Promise<string> {
         // rehypeRaw must run first (it parses the raw HTML), sanitize right after.
         rehypePlugins: [rehypeRaw, [rehypeSanitize, markdownSanitizeSchema]],
       },
-      markdown
+      hardLineBreaks(markdown)
     )
   );
 }

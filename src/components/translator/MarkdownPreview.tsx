@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import { markdownSanitizeSchema } from '@/services/markdownSanitize';
-import { parseMarkdown } from '@/services/markdownUtils';
+import { hardLineBreaks, parseMarkdown } from '@/services/markdownUtils';
 import { useGlossaryStore } from '@/stores/glossaryStore';
 import { Button } from '@/components/ui/button';
 import { Highlighter } from 'lucide-react';
@@ -191,6 +191,7 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
   } catch {
     // Not parseable, just render as-is
   }
+  body = hardLineBreaks(body);
 
   const shouldHighlight = highlightEnabled && regex && termMap.size > 0;
 
