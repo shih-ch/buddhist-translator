@@ -184,15 +184,33 @@ const DEFAULT_PRESETS: TranslationPreset[] = [
 const STORAGE_KEY = 'bt-ai-functions'
 const PRESETS_KEY = 'bt-translation-presets'
 
+/**
+ * `baseDefault` records which built-in prompt was current when the entry was
+ * saved. A prompt still equal to it was never customised, so the next load
+ * follows the (possibly newer) built-in default instead of pinning the user to
+ * an old one — otherwise every prompt fix needed a manual 恢復預設 per function.
+ */
+type StoredFunction = AIFunctionConfig & { baseDefault?: string }
+
+function persistFunctions(functions: AIFunctionConfig[]) {
+  const stored: StoredFunction[] = functions.map((f) => ({
+    ...f,
+    baseDefault: DEFAULT_FUNCTIONS.find((d) => d.id === f.id)?.defaultPrompt,
+  }))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(stored))
+}
+
 function loadFunctions(): AIFunctionConfig[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return DEFAULT_FUNCTIONS
-    const saved = JSON.parse(raw) as AIFunctionConfig[]
+    const saved = JSON.parse(raw) as StoredFunction[]
     // Merge with defaults to ensure new fields/functions are included
     return DEFAULT_FUNCTIONS.map((def) => {
       const found = saved.find((s) => s.id === def.id)
-      return found ? { ...def, provider: found.provider, model: found.model, prompt: found.prompt } : def
+      if (!found) return def
+      const untouched = found.baseDefault !== undefined && found.prompt === found.baseDefault
+      return { ...def, provider: found.provider, model: found.model, prompt: untouched ? def.defaultPrompt : found.prompt }
     })
   } catch {
     return DEFAULT_FUNCTIONS
@@ -241,7 +259,7 @@ export const useAIFunctionsStore = create<AIFunctionsState>((set, get) => ({
       const updated = state.functions.map((f) =>
         f.id === id ? { ...f, ...updates } : f
       )
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+      persistFunctions(updated)
       return { functions: updated }
     })
   },
@@ -258,7 +276,7 @@ export const useAIFunctionsStore = create<AIFunctionsState>((set, get) => ({
       const updated = state.functions.map((f) =>
         f.id === id ? { ...f, prompt: def.defaultPrompt } : f
       )
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+      persistFunctions(updated)
       return { functions: updated }
     })
   },
@@ -276,9 +294,21 @@ export const useAIFunctionsStore = create<AIFunctionsState>((set, get) => ({
         const remote = funcs[f.id]
         return remote ? { ...f, provider: remote.provider, model: remote.model, prompt: remote.prompt, defaultPrompt: remote.prompt } : f
       })
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+      persistFunctions(updated)
       localStorage.setItem(PRESETS_KEY, JSON.stringify(presets))
       return { functions: updated, presets }
     })
   },
 }))
+
+// Another tab saved new prompts or models. Without this, a tab opened earlier
+// kept translating with its in-memory copy until it was reloaded.
+function onStorage(e: StorageEvent) {
+  if (e.key === STORAGE_KEY) useAIFunctionsStore.setState({ functions: loadFunctions() })
+  else if (e.key === PRESETS_KEY) useAIFunctionsStore.setState({ presets: loadPresets() })
+}
+window.addEventListener('storage', onStorage)
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => window.removeEventListener('storage', onStorage))
+}

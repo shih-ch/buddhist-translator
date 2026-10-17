@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useTranslatorStore } from '@/stores/translatorStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { ParamPresets } from './ParamPresets';
 
 export function TranslationParams() {
@@ -18,6 +19,8 @@ export function TranslationParams() {
   const translationParams = useTranslatorStore((s) => s.translationParams);
   const setTranslationParams = useTranslatorStore((s) => s.setTranslationParams);
   const activePreset = useTranslatorStore((s) => s.activePreset);
+  const autoFormat = useSettingsStore((s) => s.preferences.autoFormatOnAdopt);
+  const setPreference = useSettingsStore((s) => s.setPreference);
   const p = translationParams;
 
   return (
@@ -179,6 +182,15 @@ export function TranslationParams() {
               <p className="mt-1 text-xs text-muted-foreground">
                 偈頌/咒語每句都給；敘述句不給
               </p>
+            </div>
+
+            {/* Not a translation param — it runs after adopting, so it isn't sent to the model */}
+            <div className="flex items-center justify-between" title="按「採用」後自動用「譯文排版」整理版面">
+              <Label className="text-xs">採用時自動 AI 排版</Label>
+              <Switch
+                checked={autoFormat}
+                onCheckedChange={(v) => setPreference('autoFormatOnAdopt', v)}
+              />
             </div>
           </div>
         </div>

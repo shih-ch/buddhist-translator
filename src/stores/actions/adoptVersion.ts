@@ -3,6 +3,7 @@ import type { AIMessage } from '@/services/ai/types';
 import type { AIProviderId } from '@/types/settings';
 import { assembleMarkdown } from '@/services/markdownUtils';
 import { callFunction } from '@/services/ai/router';
+import { trackedCallFunction } from '@/services/ai/trackedCall';
 import { useAIFunctionsStore } from '@/stores/aiFunctionsStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTranslationMemoryStore } from '@/stores/translationMemoryStore';
@@ -91,6 +92,38 @@ ${requests.join('\n')}
   return result;
 }
 
+const TIBETAN_RE = /[\u0F00-\u0FFF]/g;
+const count = (text: string, re: RegExp) => (text.match(re) || []).length;
+
+/**
+ * Run 譯文排版 on a translation body. The formatter is a cheap model told to
+ * touch layout only; if its output lost text (or touched Tibetan) the
+ * unformatted translation is the better result, so that throws instead.
+ */
+async function autoFormatBody(content: string): Promise<string> {
+  const fnConfig = useAIFunctionsStore.getState().getFunctionConfig('translation_formatting');
+  const apiKeys = useSettingsStore.getState().apiKeys;
+  if (!apiKeys[fnConfig.provider]) throw new Error(`未設定 ${fnConfig.provider} 的 API Key`);
+
+  const response = await trackedCallFunction(
+    fnConfig,
+    apiKeys,
+    [
+      { role: 'system', content: fnConfig.prompt },
+      { role: 'user', content },
+    ],
+    undefined,
+    'translation_formatting',
+  );
+  const fenced = response.content.match(/^\s*```(?:markdown|md)?\s*\n([\s\S]*?)\n```\s*$/);
+  const out = (fenced ? fenced[1] : response.content).trim();
+
+  const visible = (t: string) => t.replace(/\s/g, '').length;
+  if (visible(out) < visible(content) * 0.85) throw new Error('排版結果少了內容');
+  if (count(out, TIBETAN_RE) < count(content, TIBETAN_RE) * 0.98) throw new Error('排版結果改動了藏文');
+  return out;
+}
+
 export function performAdoptVersion(messageId: string, get: TranslatorStoreGet, set: TranslatorStoreSet): void {
   const state = get();
   const msg = state.messages.find((m) => m.id === messageId);
@@ -126,6 +159,35 @@ export function performAdoptVersion(messageId: string, get: TranslatorStoreGet, 
   const md = assembleMarkdown(metadata, msg.content, state.originalText || undefined, images);
   set({ previewContent: md });
 
+  // Auto-format and title/author extraction both finish later and each rebuilds
+  // the preview. They share `body` so whichever lands second keeps the other's
+  // result, and neither overwrites a preview the user has edited (or replaced
+  // by adopting another reply) in the meantime.
+  let body = msg.content;
+  let lastAssembled = md;
+  const rebuildPreview = (): boolean => {
+    const latest = get();
+    if (latest.previewContent !== lastAssembled) return false;
+    const imgs = latest.articleImages.length > 0 ? latest.articleImages : undefined;
+    lastAssembled = assembleMarkdown(latest.metadata, body, latest.originalText || undefined, imgs);
+    set({ previewContent: lastAssembled });
+    return true;
+  };
+
+  if (useSettingsStore.getState().preferences.autoFormatOnAdopt) {
+    autoFormatBody(msg.content)
+      .then((formatted) => {
+        if (get().messages.length === 0) return;
+        body = formatted;
+        if (rebuildPreview()) toast.success('已自動 AI 排版');
+        else toast.info('預覽已被修改，略過自動 AI 排版');
+      })
+      .catch((err) => {
+        console.error('[autoFormat] failed:', err);
+        toast.error(`自動 AI 排版失敗，保留未排版的譯文：${err instanceof Error ? err.message : 'Unknown error'}`);
+      });
+  }
+
   // Save to translation memory
   if (state.originalText) {
     useTranslationMemoryStore.getState().addEntry(
@@ -160,9 +222,8 @@ export function performAdoptVersion(messageId: string, get: TranslatorStoreGet, 
           ...(extracted.title ? { title: extracted.title } : {}),
           ...(extracted.author ? { author: extracted.author } : {}),
         };
-        const imgs = latest.articleImages.length > 0 ? latest.articleImages : undefined;
-        const newMd = assembleMarkdown(updated, msg.content, latest.originalText || undefined, imgs);
-        set({ metadata: updated, previewContent: newMd });
+        set({ metadata: updated });
+        rebuildPreview();
         const parts: string[] = [];
         if (extracted.title) parts.push(`標題：${extracted.title}`);
         if (extracted.author) parts.push(`作者：${extracted.author}`);

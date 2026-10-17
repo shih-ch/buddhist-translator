@@ -22,7 +22,11 @@ interface ApiKeys {
 interface Preferences {
   lastPreset: string
   annotationMode: AnnotationMode
+  /** Run 譯文排版 on the translation when it is adopted into the preview. */
+  autoFormatOnAdopt: boolean
 }
+
+const defaultPreferences: Preferences = { lastPreset: '', annotationMode: 'abbr', autoFormatOnAdopt: true }
 
 interface SettingsState {
   apiKeys: ApiKeys
@@ -71,7 +75,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   githubToken: localStorage.getItem(KEYS.githubToken) ?? '',
   githubRepo: localStorage.getItem(KEYS.githubRepo) ?? 'shih-ch/mantra',
   githubBranch: localStorage.getItem(KEYS.githubBranch) ?? 'main',
-  preferences: loadJson<Preferences>(KEYS.preferences, { lastPreset: '', annotationMode: 'abbr' }),
+  // Spread over the defaults so preferences saved before a field existed get it.
+  preferences: { ...defaultPreferences, ...loadJson<Partial<Preferences>>(KEYS.preferences, {}) },
   notionToken: localStorage.getItem(KEYS.notionToken) ?? '',
   notionDatabaseId: localStorage.getItem(KEYS.notionDatabaseId) ?? '',
 
